@@ -148,7 +148,8 @@ FRONTEND_URL=http://localhost:5173
 **Mohit Raj** — 2nd year BTech student  
 Built in a single day as a full-stack AI project.
 
-[![LinkedIn](https://img.shields.io/badge/LinkedIn-Connect-blue?style=flat&logo=linkedin)](https://linkedin.com)
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-Connect-blue?style=flat&logo=linkedin)](https://www.linkedin.com/in/mohitraj07)
+
 
 ---
 
