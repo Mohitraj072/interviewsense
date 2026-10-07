@@ -17,6 +17,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { resetPassword } from '../firebase'
+import ThemeToggle from '../components/ThemeToggle'
 
 // ── Animation Variants ─────────────────────────────────────────────────────────
 const pageVariants = {
@@ -56,12 +57,12 @@ function AuthInput({ id, name, type, placeholder, value, onChange, icon: Icon, r
     <div
       className="relative flex items-center rounded-xl transition-all duration-200"
       style={{
-        background: 'rgba(255,255,255,0.04)',
-        border: focused ? '1px solid #6366F1' : '1px solid rgba(255,255,255,0.09)',
+        background: 'var(--pill-bg)',
+        border: focused ? '1px solid #6366F1' : '1px solid var(--surface-border)',
         boxShadow: focused ? '0 0 0 3px rgba(99,102,241,0.12)' : 'none',
       }}
     >
-      <Icon className="absolute left-3.5 w-4 h-4 text-[#475569] flex-shrink-0" />
+      <Icon className="absolute left-3.5 w-4 h-4 text-text-muted flex-shrink-0" />
       <input
         id={id}
         name={name}
@@ -72,7 +73,7 @@ function AuthInput({ id, name, type, placeholder, value, onChange, icon: Icon, r
         autoComplete={autoComplete}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
-        className="w-full pl-10 pr-10 py-3 bg-transparent text-sm text-[#F8F8FF] placeholder:text-[#475569] outline-none"
+        className="w-full pl-10 pr-10 py-3 bg-transparent text-sm text-text-primary placeholder:text-text-muted outline-none"
       />
       {rightSlot && <div className="absolute right-3">{rightSlot}</div>}
     </div>
@@ -233,7 +234,10 @@ export default function Login() {
 
   return (
     <>
-      <div className="min-h-screen flex relative overflow-hidden" style={{ backgroundColor: '#0A0A0F' }}>
+      <div className="min-h-screen flex relative overflow-hidden bg-bg-primary text-text-primary transition-colors duration-200">
+        <div className="absolute top-5 right-5 z-30">
+          <ThemeToggle id="theme-toggle-login" />
+        </div>
         {/* Left decorative panel (hidden on mobile) */}
         <div className="hidden lg:flex lg:w-[44%] xl:w-[48%] flex-col items-center justify-center relative p-12 overflow-hidden">
           {/* Ambient orbs */}
@@ -268,10 +272,10 @@ export default function Login() {
             >
               <Brain className="w-8 h-8 text-white" />
             </div>
-            <h2 className="text-3xl font-black text-[#F8F8FF] mb-3 leading-tight">
+            <h2 className="text-3xl font-black text-text-primary mb-3 leading-tight">
               Your AI interview<br />coach awaits
             </h2>
-            <p className="text-[#94A3B8] text-sm leading-relaxed mb-8">
+            <p className="text-text-secondary text-sm leading-relaxed mb-8">
               Practice with real interview questions, get instant AI feedback, and track your improvement over time.
             </p>
 
@@ -284,16 +288,14 @@ export default function Login() {
               ].map(({ icon: Icon, text }) => (
                 <div
                   key={text}
-                  className="flex items-center gap-3 text-sm text-left"
+                  className="flex items-center gap-3 text-sm text-left border border-surface-border bg-surface"
                   style={{
-                    background: 'rgba(255,255,255,0.03)',
-                    border: '1px solid rgba(255,255,255,0.07)',
                     borderRadius: '10px',
                     padding: '10px 14px',
                   }}
                 >
                   <Icon className="w-4 h-4 text-[#8B5CF6] flex-shrink-0" />
-                  <span className="text-[#94A3B8]">{text}</span>
+                  <span className="text-text-secondary">{text}</span>
                 </div>
               ))}
             </div>
@@ -338,17 +340,10 @@ export default function Login() {
               type="button"
               onClick={handleGoogle}
               disabled={googleLoading || loading}
-              className="w-full flex items-center justify-center gap-3 py-3 px-4 rounded-xl mb-5 text-sm font-semibold transition-all duration-200 disabled:opacity-50 cursor-pointer"
-              style={{
-                background: 'rgba(255,255,255,0.05)',
-                border: '1px solid rgba(255,255,255,0.11)',
-                color: '#F8F8FF',
-              }}
-              onMouseOver={(e) => !googleLoading && (e.currentTarget.style.background = 'rgba(255,255,255,0.09)')}
-              onMouseOut={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
+              className="w-full flex items-center justify-center gap-3 py-3 px-4 rounded-xl mb-5 text-sm font-semibold transition-all duration-200 disabled:opacity-50 cursor-pointer border border-surface-border bg-surface hover:bg-surface-hover text-text-primary"
             >
               {googleLoading ? (
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                <div className="w-4 h-4 border-2 border-brand-indigo border-t-transparent rounded-full animate-spin" />
               ) : (
                 <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24">
                   <path
@@ -374,9 +369,9 @@ export default function Login() {
 
             {/* Divider */}
             <div className="flex items-center gap-3 mb-5">
-              <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.07)' }} />
-              <span className="text-[11px] font-medium text-[#475569] uppercase tracking-wider">or with email</span>
-              <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.07)' }} />
+              <div className="flex-1 h-px bg-surface-border" />
+              <span className="text-[11px] font-medium text-text-muted uppercase tracking-wider">or with email</span>
+              <div className="flex-1 h-px bg-surface-border" />
             </div>
 
             {/* Email form */}

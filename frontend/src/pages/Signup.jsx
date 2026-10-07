@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Brain, User, Mail, Lock, Eye, EyeOff, ArrowRight, AlertCircle, Check } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
+import ThemeToggle from '../components/ThemeToggle'
 
 // ── Animation Variants ─────────────────────────────────────────────────────────
 const pageVariants = {
@@ -91,12 +92,12 @@ function AuthInput({ id, name, type, placeholder, value, onChange, icon: Icon, r
     <div
       className="relative flex items-center rounded-xl transition-all duration-200"
       style={{
-        background: 'rgba(255,255,255,0.04)',
-        border: focused ? '1px solid #6366F1' : '1px solid rgba(255,255,255,0.09)',
+        background: 'var(--pill-bg)',
+        border: focused ? '1px solid #6366F1' : '1px solid var(--surface-border)',
         boxShadow: focused ? '0 0 0 3px rgba(99,102,241,0.12)' : 'none',
       }}
     >
-      <Icon className="absolute left-3.5 w-4 h-4 text-[#475569] flex-shrink-0" />
+      <Icon className="absolute left-3.5 w-4 h-4 text-text-muted flex-shrink-0" />
       <input
         id={id}
         name={name}
@@ -107,7 +108,7 @@ function AuthInput({ id, name, type, placeholder, value, onChange, icon: Icon, r
         autoComplete={autoComplete}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
-        className="w-full pl-10 pr-10 py-3 bg-transparent text-sm text-[#F8F8FF] placeholder:text-[#475569] outline-none"
+        className="w-full pl-10 pr-10 py-3 bg-transparent text-sm text-text-primary placeholder:text-text-muted outline-none"
       />
       {rightSlot && <div className="absolute right-3">{rightSlot}</div>}
     </div>
@@ -167,7 +168,10 @@ export default function Signup() {
   }
 
   return (
-    <div className="min-h-screen flex relative overflow-hidden" style={{ backgroundColor: '#0A0A0F' }}>
+    <div className="min-h-screen flex relative overflow-hidden bg-bg-primary text-text-primary transition-colors duration-200">
+      <div className="absolute top-5 right-5 z-30">
+        <ThemeToggle id="theme-toggle-signup" />
+      </div>
       {/* Left decorative panel */}
       <div className="hidden lg:flex lg:w-[44%] xl:w-[48%] flex-col items-center justify-center relative p-12 overflow-hidden">
         <div className="absolute inset-0 pointer-events-none">
@@ -199,10 +203,10 @@ export default function Signup() {
           >
             <Brain className="w-8 h-8 text-white" />
           </div>
-          <h2 className="text-3xl font-black text-[#F8F8FF] mb-3 leading-tight">
+          <h2 className="text-3xl font-black text-text-primary mb-3 leading-tight">
             Land your dream<br />role with AI
           </h2>
-          <p className="text-[#94A3B8] text-sm leading-relaxed mb-8">
+          <p className="text-text-secondary text-sm leading-relaxed mb-8">
             Join thousands of candidates who improved their interview performance with personalized AI coaching.
           </p>
 
@@ -215,8 +219,7 @@ export default function Signup() {
             ].map(({ value, label }) => (
               <div
                 key={label}
-                className="rounded-xl py-3 px-2 text-center"
-                style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}
+                className="rounded-xl py-3 px-2 text-center bg-surface border border-surface-border"
               >
                 <div
                   className="text-lg font-black"
@@ -229,7 +232,7 @@ export default function Signup() {
                 >
                   {value}
                 </div>
-                <div className="text-[10px] text-[#475569] mt-0.5">{label}</div>
+                <div className="text-[10px] text-text-muted mt-0.5">{label}</div>
               </div>
             ))}
           </div>
@@ -279,17 +282,10 @@ export default function Signup() {
             type="button"
             onClick={handleGoogle}
             disabled={googleLoading || loading}
-            className="w-full flex items-center justify-center gap-3 py-3 px-4 rounded-xl mb-5 text-sm font-semibold transition-all duration-200 disabled:opacity-50 cursor-pointer"
-            style={{
-              background: 'rgba(255,255,255,0.05)',
-              border: '1px solid rgba(255,255,255,0.11)',
-              color: '#F8F8FF',
-            }}
-            onMouseOver={(e) => !googleLoading && (e.currentTarget.style.background = 'rgba(255,255,255,0.09)')}
-            onMouseOut={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
+            className="w-full flex items-center justify-center gap-3 py-3 px-4 rounded-xl mb-5 text-sm font-semibold transition-all duration-200 disabled:opacity-50 cursor-pointer border border-surface-border bg-surface hover:bg-surface-hover text-text-primary"
           >
             {googleLoading ? (
-              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              <div className="w-4 h-4 border-2 border-brand-indigo border-t-transparent rounded-full animate-spin" />
             ) : (
               <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24">
                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
@@ -303,9 +299,9 @@ export default function Signup() {
 
           {/* Divider */}
           <div className="flex items-center gap-3 mb-5">
-            <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.07)' }} />
-            <span className="text-[11px] font-medium text-[#475569] uppercase tracking-wider">or with email</span>
-            <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.07)' }} />
+            <div className="flex-1 h-px bg-surface-border" />
+            <span className="text-[11px] font-medium text-text-muted uppercase tracking-wider">or with email</span>
+            <div className="flex-1 h-px bg-surface-border" />
           </div>
 
           {/* Form */}

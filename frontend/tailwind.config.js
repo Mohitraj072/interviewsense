@@ -13,18 +13,18 @@ export default {
       colors: {
         // Base backgrounds
         bg: {
-          primary: '#0A0A0F',
-          secondary: '#111118',
-          tertiary: '#16161F',
+          primary: 'rgb(var(--bg-primary-rgb) / <alpha-value>)',
+          secondary: 'rgb(var(--bg-secondary-rgb) / <alpha-value>)',
+          tertiary: 'rgb(var(--bg-tertiary-rgb) / <alpha-value>)',
         },
         // Surface / cards
         surface: {
-          DEFAULT: '#111118',
-          hover: '#1A1A25',
-          border: '#1E1E2E',
-          border2: '#2A2A3E',
+          DEFAULT: 'rgb(var(--surface-default-rgb) / <alpha-value>)',
+          hover: 'var(--surface-hover)',
+          border: 'rgb(var(--surface-border-rgb) / <alpha-value>)',
+          border2: 'var(--surface-border2)',
         },
-        // Brand colors
+        // Brand colors (purple accent kept identical in both modes)
         brand: {
           indigo: '#6366F1',
           violet: '#8B5CF6',
@@ -33,9 +33,9 @@ export default {
         },
         // Text
         text: {
-          primary: '#F8F8FF',
-          secondary: '#94A3B8',
-          muted: '#475569',
+          primary: 'rgb(var(--text-primary-rgb) / <alpha-value>)',
+          secondary: 'rgb(var(--text-secondary-rgb) / <alpha-value>)',
+          muted: 'var(--text-muted)',
           accent: '#6366F1',
         },
       },

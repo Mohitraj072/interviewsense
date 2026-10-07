@@ -1,17 +1,19 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
   Brain, BarChart3, Clock, Trophy, TrendingUp, Flame,
   Play, FileText, LogOut, ChevronRight, Target,
   Plus, Calendar, Upload, Sparkles, Loader2, ArrowRight,
-  Bell
+  Bell, Star, Rocket, Gem, GraduationCap, Award, Lock,
+  CheckCircle2, Dumbbell, Zap
 } from 'lucide-react'
 import axios from 'axios'
 import { collection, query, where, getDocs } from 'firebase/firestore'
 import { useAuth } from '../context/AuthContext'
 import { db } from '../firebase'
 import ProfileSetup from '../components/ProfileSetup'
+import ThemeToggle from '../components/ThemeToggle'
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000'
 
@@ -22,23 +24,132 @@ const fadeUp = {
   visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: [0.22, 1, 0.36, 1] } },
 }
 
-function StatCard({ icon: Icon, label, value, sub, color = '#6366F1', trend }) {
+function StatCard({ icon: Icon, label, value, sub, color = '#6366F1', trend, isStreak, streakCount }) {
+  if (isStreak) {
+    const hasStreak = streakCount > 0
+    return (
+      <motion.div
+        variants={fadeUp}
+        className="feature-card group cursor-default relative overflow-hidden"
+        style={{
+          backgroundColor: 'var(--card-bg)',
+          border: hasStreak ? '1.5px solid rgba(239, 68, 68, 0.4)' : '1px solid var(--card-border)',
+          boxShadow: hasStreak ? '0 4px 20px rgba(239, 68, 68, 0.15)' : 'var(--card-shadow)',
+        }}
+      >
+        <div className="flex items-start justify-between mb-4">
+          <div
+            className="w-10 h-10 rounded-xl flex items-center justify-center relative"
+            style={{
+              background: hasStreak
+                ? 'linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(245, 158, 11, 0.2))'
+                : `${color}15`,
+              border: hasStreak ? '1px solid rgba(239, 68, 68, 0.4)' : `1px solid ${color}30`,
+            }}
+          >
+            {hasStreak ? (
+              <motion.div
+                animate={{
+                  scale: [1, 1.25, 1],
+                  rotate: [-4, 4, -4],
+                }}
+                transition={{
+                  duration: 1.2,
+                  repeat: Infinity,
+                  ease: 'easeInOut',
+                }}
+              >
+                <Flame className="w-5 h-5 text-red-500 fill-red-500/40" />
+              </motion.div>
+            ) : (
+              <Flame className="w-5 h-5 text-text-muted" />
+            )}
+          </div>
+          {hasStreak ? (
+            <motion.span
+              animate={{ scale: [1, 1.08, 1] }}
+              transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
+              className="text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm"
+              style={{
+                background: 'linear-gradient(135deg, #EF4444, #F59E0B)',
+                color: '#FFFFFF',
+                boxShadow: '0 0 10px rgba(239, 68, 68, 0.4)',
+              }}
+            >
+              🔥 Active
+            </motion.span>
+          ) : (
+            <span
+              className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
+              style={{
+                background: 'var(--pill-bg)',
+                color: 'var(--text-muted)',
+                border: '1px solid var(--surface-border)',
+              }}
+            >
+              Ready
+            </span>
+          )}
+        </div>
+
+        {hasStreak ? (
+          <div>
+            <div className="flex items-center gap-1.5 mb-0.5">
+              <motion.span
+                animate={{ scale: [1, 1.3, 1] }}
+                transition={{ duration: 1.2, repeat: Infinity }}
+                className="text-xl leading-none select-none"
+              >
+                🔥
+              </motion.span>
+              <p className="text-2xl font-black gradient-text-flame leading-none">
+                {streakCount} {streakCount === 1 ? 'day' : 'days'}
+              </p>
+            </div>
+            <p className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>{label}</p>
+            <p className="text-xs font-bold mt-1 text-orange-500 flex items-center gap-1">
+              🔥 {streakCount} day streak
+            </p>
+          </div>
+        ) : (
+          <div>
+            <p className="text-2xl font-black mb-0.5" style={{ color: 'var(--text-primary)' }}>
+              0 days
+            </p>
+            <p className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>{label}</p>
+            <p className="text-xs mt-0.5 font-medium" style={{ color: 'var(--text-muted)' }}>
+              Start your streak today!
+            </p>
+          </div>
+        )}
+      </motion.div>
+    )
+  }
+
   return (
-    <motion.div variants={fadeUp} className="feature-card group cursor-default">
+    <motion.div
+      variants={fadeUp}
+      className="feature-card group cursor-default"
+      style={{
+        backgroundColor: 'var(--card-bg)',
+        border: '1px solid var(--card-border)',
+        boxShadow: 'var(--card-shadow)',
+      }}
+    >
       <div className="flex items-start justify-between mb-4">
         <div className="w-10 h-10 rounded-xl flex items-center justify-center"
           style={{ background: `${color}15`, border: `1px solid ${color}30` }}>
           <Icon className="w-5 h-5" style={{ color }} />
         </div>
         {trend !== undefined && (
-          <span className={`text-xs font-semibold px-2 py-1 rounded-full ${trend >= 0 ? 'text-green-400 bg-green-400/10' : 'text-red-400 bg-red-400/10'}`}>
+          <span className={`text-xs font-semibold px-2 py-1 rounded-full ${trend >= 0 ? 'text-green-500 bg-green-500/10' : 'text-red-500 bg-red-500/10'}`}>
             {trend >= 0 ? '+' : ''}{trend}%
           </span>
         )}
       </div>
-      <p className="text-2xl font-black text-text-primary mb-0.5">{value}</p>
-      <p className="text-sm font-medium text-text-secondary">{label}</p>
-      {sub && <p className="text-xs text-text-muted mt-0.5">{sub}</p>}
+      <p className="text-2xl font-black mb-0.5" style={{ color: 'var(--text-primary)' }}>{value}</p>
+      <p className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>{label}</p>
+      {sub && <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{sub}</p>}
     </motion.div>
   )
 }
@@ -58,7 +169,7 @@ function StreakCalendar({ interviewDates = [] }) {
       <div className="flex items-center justify-between mb-4">
         <p className="text-sm font-semibold text-text-primary">Activity — Last 28 days</p>
         <div className="flex items-center gap-1.5 text-xs text-text-muted">
-          <div className="w-3 h-3 rounded-sm" style={{ background: 'rgba(255,255,255,0.06)' }} />
+          <div className="w-3 h-3 rounded-sm" style={{ background: 'var(--surface-border)' }} />
           <span>None</span>
           <div className="w-3 h-3 rounded-sm bg-brand-indigo" />
           <span>Active</span>
@@ -75,8 +186,8 @@ function StreakCalendar({ interviewDates = [] }) {
               style={{
                 background: active
                   ? `rgba(99,102,241,${0.4 + Math.random() * 0.6})`
-                  : 'rgba(255,255,255,0.05)',
-                border: active ? '1px solid rgba(99,102,241,0.4)' : '1px solid rgba(255,255,255,0.04)',
+                  : 'var(--pill-bg)',
+                border: active ? '1px solid rgba(99,102,241,0.4)' : '1px solid var(--surface-border)',
               }}
             />
           )
@@ -98,14 +209,241 @@ function ScoreBadge({ score }) {
   )
 }
 
+// ─── Badges Logic & Achievements Component ─────────────────────────────────────
+function getAchievements(history = [], currentStreak = 0) {
+  const totalInterviews = history.length
+  const scores = history.map((h) => {
+    const s = h.totalScore ?? h.score
+    return typeof s === 'number' ? s : 0
+  })
+  const bestScore = scores.length ? Math.max(...scores) : 0
+
+  const hasUnder1Min = history.some((h) => {
+    const t = h.timePerQuestion ?? h.timeLimit ?? h.customTimeLimit
+    return typeof t === 'number' && t <= 60 && t > 0
+  })
+
+  return [
+    {
+      id: 'first_interview',
+      name: 'First Interview',
+      description: 'Complete your first interview',
+      icon: Target,
+      emoji: '🎯',
+      earned: totalInterviews >= 1,
+      color: '#6366F1',
+    },
+    {
+      id: 'on_fire',
+      name: 'On Fire',
+      description: '3 day streak',
+      icon: Flame,
+      emoji: '🔥',
+      earned: currentStreak >= 3,
+      color: '#EF4444',
+    },
+    {
+      id: 'consistent',
+      name: 'Consistent',
+      description: 'Complete 5 interviews',
+      icon: Dumbbell,
+      emoji: '💪',
+      earned: totalInterviews >= 5,
+      color: '#10B981',
+    },
+    {
+      id: 'high_achiever',
+      name: 'High Achiever',
+      description: 'Score above 70 in any interview',
+      icon: Star,
+      emoji: '⭐',
+      earned: bestScore > 70,
+      color: '#F59E0B',
+    },
+    {
+      id: 'speed_runner',
+      name: 'Speed Runner',
+      description: 'Complete an interview under 1 minute timer',
+      icon: Rocket,
+      emoji: '🚀',
+      earned: hasUnder1Min,
+      color: '#8B5CF6',
+    },
+    {
+      id: 'champion',
+      name: 'Champion',
+      description: 'Score above 90',
+      icon: Trophy,
+      emoji: '🏆',
+      earned: bestScore > 90,
+      color: '#F59E0B',
+    },
+    {
+      id: 'diamond',
+      name: 'Diamond',
+      description: '7 day streak',
+      icon: Gem,
+      emoji: '💎',
+      earned: currentStreak >= 7,
+      color: '#3B82F6',
+    },
+    {
+      id: 'graduate',
+      name: 'Graduate',
+      description: 'Complete 10 interviews',
+      icon: GraduationCap,
+      emoji: '🎓',
+      earned: totalInterviews >= 10,
+      color: '#10B981',
+    },
+    {
+      id: 'perfect',
+      name: 'Perfect',
+      description: 'Score 100/100',
+      icon: Award,
+      emoji: '🌟',
+      earned: scores.some((s) => s === 100),
+      color: '#EC4899',
+    },
+  ]
+}
+
+function AchievementsSection({ achievements = [] }) {
+  const earnedCount = achievements.filter((a) => a.earned).length
+  const totalCount = achievements.length
+  const percent = Math.round((earnedCount / totalCount) * 100)
+
+  return (
+    <div className="space-y-4 pt-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        <div>
+          <h2 className="text-base font-bold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+            <Award className="w-4 h-4 text-brand-indigo" />
+            Your Achievements
+          </h2>
+          <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+            Unlock milestone badges by practicing, maintaining streaks, and acing mock interviews
+          </p>
+        </div>
+        <div
+          className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold self-start sm:self-auto"
+          style={{
+            backgroundColor: 'var(--pill-bg)',
+            border: '1px solid var(--surface-border)',
+            color: 'var(--text-primary)',
+          }}
+        >
+          <span>🏆 {earnedCount} of {totalCount} Unlocked</span>
+          <span className="text-brand-indigo font-bold">({percent}%)</span>
+        </div>
+      </div>
+
+      {/* Progress track */}
+      <div className="h-2 rounded-full overflow-hidden" style={{ background: 'var(--pill-bg)' }}>
+        <motion.div
+          initial={{ width: 0 }}
+          animate={{ width: `${percent}%` }}
+          transition={{ duration: 1, ease: 'easeOut' }}
+          className="h-full rounded-full"
+          style={{ background: 'linear-gradient(90deg, #6366F1, #8B5CF6, #EC4899)' }}
+        />
+      </div>
+
+      {/* Badges Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        {achievements.map((badge) => {
+          return (
+            <motion.div
+              key={badge.id}
+              whileHover={{ y: -2 }}
+              className="p-3.5 rounded-2xl transition-all duration-200 relative overflow-hidden flex flex-col justify-between"
+              style={{
+                backgroundColor: badge.earned ? 'var(--card-bg)' : 'var(--pill-bg)',
+                border: badge.earned
+                  ? `1.5px solid ${badge.color}45`
+                  : '1px dashed var(--surface-border)',
+                boxShadow: badge.earned ? 'var(--card-shadow)' : 'none',
+                opacity: badge.earned ? 1 : 0.65,
+              }}
+            >
+              {/* Top row: Icon + status badge */}
+              <div className="flex items-start justify-between mb-2.5">
+                <div
+                  className="w-10 h-10 rounded-xl flex items-center justify-center text-lg relative"
+                  style={{
+                    background: badge.earned ? `${badge.color}18` : 'var(--surface-border)',
+                    border: `1px solid ${badge.earned ? `${badge.color}40` : 'transparent'}`,
+                  }}
+                >
+                  <span className={badge.earned ? '' : 'grayscale opacity-60'}>{badge.emoji}</span>
+                  {!badge.earned && (
+                    <div
+                      className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center"
+                      style={{ background: 'var(--surface-default)', border: '1px solid var(--surface-border)' }}
+                    >
+                      <Lock className="w-2.5 h-2.5" style={{ color: 'var(--text-muted)' }} />
+                    </div>
+                  )}
+                </div>
+
+                {badge.earned ? (
+                  <span
+                    className="text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1"
+                    style={{
+                      background: 'rgba(16, 185, 129, 0.12)',
+                      color: '#10B981',
+                      border: '1px solid rgba(16, 185, 129, 0.25)',
+                    }}
+                  >
+                    <CheckCircle2 className="w-3 h-3" /> Unlocked
+                  </span>
+                ) : (
+                  <span
+                    className="text-[10px] font-semibold px-2 py-0.5 rounded-full flex items-center gap-1"
+                    style={{
+                      background: 'var(--pill-bg)',
+                      color: 'var(--text-muted)',
+                      border: '1px solid var(--surface-border)',
+                    }}
+                  >
+                    <Lock className="w-2.5 h-2.5" /> Locked
+                  </span>
+                )}
+              </div>
+
+              {/* Title & Description */}
+              <div>
+                <h3
+                  className="text-xs font-bold mb-0.5 truncate"
+                  style={{ color: badge.earned ? 'var(--text-primary)' : 'var(--text-muted)' }}
+                >
+                  {badge.name}
+                </h3>
+                <p className="text-[11px] leading-snug" style={{ color: 'var(--text-muted)' }}>
+                  {badge.description}
+                </p>
+              </div>
+            </motion.div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 // ─── New Interview Modal with Resume Upload Support ─────────────────────────
 const DOMAINS = ['DSA', 'Web Dev', 'System Design', 'OS', 'DBMS', 'Networking', 'HR', 'Behavioral']
 const TYPES = ['Technical', 'HR', 'Mixed']
 const DIFFICULTIES = ['Easy', 'Medium', 'Hard']
 
-function NewInterviewModal({ onClose, onStart, initialRole = 'Software Engineer' }) {
+export function NewInterviewModal({ onClose, onStart, initialRole = 'Software Engineer' }) {
   const [activeTab, setActiveTab] = useState('standard') // 'standard' | 'resume'
-  const [config, setConfig] = useState({ type: 'Technical', difficulty: 'Medium', domain: 'DSA' })
+  const [config, setConfig] = useState({
+    type: 'Technical',
+    difficulty: 'Medium',
+    domain: 'DSA',
+    timePerQuestion: 120,
+  })
   
   // Resume mode states
   const [resumeFile, setResumeFile] = useState(null)
@@ -153,6 +491,7 @@ function NewInterviewModal({ onClose, onStart, initialRole = 'Software Engineer'
         domain: `Resume · ${targetRole}`,
         isResumeBased: true,
         customQuestions: questions,
+        timePerQuestion: config.timePerQuestion !== undefined ? config.timePerQuestion : 120,
       })
     } catch (err) {
       console.warn('Resume API fallback:', err)
@@ -169,6 +508,7 @@ function NewInterviewModal({ onClose, onStart, initialRole = 'Software Engineer'
           { question: `Tell me about a time you had to balance clean code architecture with rapid business delivery.` },
           { question: `What questions do you have about engineering culture and development practices?` },
         ],
+        timePerQuestion: config.timePerQuestion !== undefined ? config.timePerQuestion : 120,
       })
     } finally {
       setAnalyzingResume(false)
@@ -177,7 +517,7 @@ function NewInterviewModal({ onClose, onStart, initialRole = 'Software Engineer'
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: 'rgba(10,10,15,0.85)', backdropFilter: 'blur(12px)' }}>
+      style={{ background: 'var(--modal-overlay)', backdropFilter: 'blur(12px)' }}>
       <motion.div
         initial={{ opacity: 0, scale: 0.92, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -198,7 +538,7 @@ function NewInterviewModal({ onClose, onStart, initialRole = 'Software Engineer'
         </div>
 
         {/* Tab switcher: Standard vs Resume */}
-        <div className="flex rounded-xl p-1 mb-5" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+        <div className="flex rounded-xl p-1 mb-5" style={{ background: 'var(--pill-bg)', border: '1px solid var(--surface-border)' }}>
           <button
             onClick={() => setActiveTab('standard')}
             className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${
@@ -232,9 +572,9 @@ function NewInterviewModal({ onClose, onStart, initialRole = 'Software Engineer'
                   <button key={t} onClick={() => setConfig((c) => ({ ...c, type: t }))}
                     className="py-2.5 rounded-xl text-xs font-semibold transition-all"
                     style={{
-                      border: `1px solid ${config.type === t ? '#6366F1' : 'rgba(255,255,255,0.08)'}`,
-                      background: config.type === t ? 'rgba(99,102,241,0.12)' : 'rgba(255,255,255,0.03)',
-                      color: config.type === t ? '#6366F1' : '#94A3B8',
+                      border: `1px solid ${config.type === t ? '#6366F1' : 'var(--surface-border)'}`,
+                      background: config.type === t ? 'rgba(99,102,241,0.12)' : 'var(--pill-bg)',
+                      color: config.type === t ? '#6366F1' : 'var(--text-secondary)',
                     }}>
                     {t}
                   </button>
@@ -250,9 +590,9 @@ function NewInterviewModal({ onClose, onStart, initialRole = 'Software Engineer'
                   <button key={d} onClick={() => setConfig((c) => ({ ...c, domain: d }))}
                     className="py-2 rounded-xl text-[11px] font-semibold transition-all"
                     style={{
-                      border: `1px solid ${config.domain === d ? '#6366F1' : 'rgba(255,255,255,0.08)'}`,
-                      background: config.domain === d ? 'rgba(99,102,241,0.12)' : 'rgba(255,255,255,0.03)',
-                      color: config.domain === d ? '#6366F1' : '#94A3B8',
+                      border: `1px solid ${config.domain === d ? '#6366F1' : 'var(--surface-border)'}`,
+                      background: config.domain === d ? 'rgba(99,102,241,0.12)' : 'var(--pill-bg)',
+                      color: config.domain === d ? '#6366F1' : 'var(--text-secondary)',
                     }}>
                     {d}
                   </button>
@@ -271,9 +611,9 @@ function NewInterviewModal({ onClose, onStart, initialRole = 'Software Engineer'
                     <button key={dif} onClick={() => setConfig((c) => ({ ...c, difficulty: dif }))}
                       className="py-2.5 rounded-xl text-xs font-semibold transition-all"
                       style={{
-                        border: `1px solid ${active ? colors[dif] : 'rgba(255,255,255,0.08)'}`,
-                        background: active ? `${colors[dif]}15` : 'rgba(255,255,255,0.03)',
-                        color: active ? colors[dif] : '#94A3B8',
+                        border: `1px solid ${active ? colors[dif] : 'var(--surface-border)'}`,
+                        background: active ? `${colors[dif]}15` : 'var(--pill-bg)',
+                        color: active ? colors[dif] : 'var(--text-secondary)',
                       }}>
                       {dif}
                     </button>
@@ -282,9 +622,44 @@ function NewInterviewModal({ onClose, onStart, initialRole = 'Software Engineer'
               </div>
             </div>
 
+            {/* Time per Question */}
+            <div>
+              <label className="block text-xs font-semibold text-text-secondary mb-1.5">Time per Question</label>
+              <div className="grid grid-cols-4 gap-1.5">
+                {[
+                  { label: 'No Limit', value: 0 },
+                  { label: '1 min', value: 60 },
+                  { label: '2 min', value: 120, recommended: true },
+                  { label: '3 min', value: 180 },
+                ].map((opt) => {
+                  const active = config.timePerQuestion === opt.value
+                  return (
+                    <button
+                      key={opt.label}
+                      type="button"
+                      onClick={() => setConfig((c) => ({ ...c, timePerQuestion: opt.value }))}
+                      className="py-2.5 rounded-xl text-xs font-semibold transition-all flex flex-col items-center justify-center min-h-[46px]"
+                      style={{
+                        border: `1px solid ${active ? '#6366F1' : 'var(--surface-border)'}`,
+                        background: active ? 'rgba(99,102,241,0.12)' : 'var(--pill-bg)',
+                        color: active ? '#6366F1' : 'var(--text-secondary)',
+                      }}
+                    >
+                      <span>{opt.label}</span>
+                      {opt.recommended && (
+                        <span className={`text-[8px] font-bold tracking-tight ${active ? 'text-brand-indigo' : 'text-text-muted'}`}>
+                          Recommended
+                        </span>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
             <div className="flex gap-3 pt-3">
               <button onClick={onClose} className="btn-secondary flex-1 justify-center py-2.5 text-xs">Cancel</button>
-              <button id="btn-start-interview" onClick={() => onStart(config)} className="btn-primary flex-1 justify-center py-2.5 text-xs">
+              <button id="btn-start-interview" onClick={() => onStart({ ...config, autoStart: true })} className="btn-primary flex-1 justify-center py-2.5 text-xs">
                 <Play className="w-3.5 h-3.5" /> Start Interview
               </button>
             </div>
@@ -337,9 +712,9 @@ function NewInterviewModal({ onClose, onStart, initialRole = 'Software Engineer'
                     <button key={dif} onClick={() => setResumeDifficulty(dif)}
                       className="py-2.5 rounded-xl text-xs font-semibold transition-all"
                       style={{
-                        border: `1px solid ${active ? colors[dif] : 'rgba(255,255,255,0.08)'}`,
-                        background: active ? `${colors[dif]}15` : 'rgba(255,255,255,0.03)',
-                        color: active ? colors[dif] : '#94A3B8',
+                        border: `1px solid ${active ? colors[dif] : 'var(--surface-border)'}`,
+                        background: active ? `${colors[dif]}15` : 'var(--pill-bg)',
+                        color: active ? colors[dif] : 'var(--text-secondary)',
                       }}>
                       {dif}
                     </button>
@@ -482,7 +857,7 @@ export default function Dashboard() {
     } else if (dates.has(yesterdayKey)) {
       cursor = new Date(yesterday)
     } else {
-      return 1 // At least 1 if candidate completed interviews
+      return 0
     }
 
     let streak = 0
@@ -490,7 +865,7 @@ export default function Dashboard() {
       streak += 1
       cursor.setDate(cursor.getDate() - 1)
     }
-    return Math.max(streak, 1)
+    return streak
   }
 
   // Real stats computed from Firestore reports
@@ -500,12 +875,24 @@ export default function Dashboard() {
   const avgScore = scoresList.length ? Math.round(scoresList.reduce((a, b) => a + b, 0) / scoresList.length) : null
   const bestScore = scoresList.length ? Math.max(...scoresList) : null
   const totalSessionsCount = history.length
-  const currentStreak = calculateStreak(history)
+  const currentStreak = calculateStreak(history) || profile?.streak || 0
+
+  const achievements = useMemo(() => {
+    return getAchievements(history, currentStreak)
+  }, [history, currentStreak])
 
   const stats = [
     { icon: BarChart3, label: 'Avg Score', value: avgScore !== null ? `${avgScore}%` : '—', color: '#6366F1' },
     { icon: Trophy, label: 'Best Score', value: bestScore !== null ? `${bestScore}%` : '—', color: '#F59E0B' },
-    { icon: Flame, label: 'Day Streak', value: `${currentStreak} ${currentStreak === 1 ? 'day' : 'days'}`, sub: currentStreak > 0 ? 'Active streak!' : 'Practice today!', color: '#EF4444' },
+    {
+      icon: Flame,
+      label: 'Day Streak',
+      value: currentStreak > 0 ? `${currentStreak} ${currentStreak === 1 ? 'day' : 'days'}` : '0 days',
+      sub: currentStreak > 0 ? `🔥 ${currentStreak} day streak` : 'Start your streak today!',
+      color: '#EF4444',
+      isStreak: true,
+      streakCount: currentStreak,
+    },
     { icon: Clock, label: 'Total Interviews', value: totalSessionsCount, sub: 'Sessions completed', color: '#10B981' },
   ]
 
@@ -513,7 +900,10 @@ export default function Dashboard() {
   const initials = displayName.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()
 
   return (
-    <div className="min-h-screen bg-bg-primary">
+    <div
+      className="min-h-screen transition-colors duration-300"
+      style={{ backgroundColor: 'var(--bg-primary)' }}
+    >
       {/* Profile Setup Modal */}
       {showProfileSetup && (
         <ProfileSetup onComplete={() => setShowProfileSetup(false)} />
@@ -528,13 +918,22 @@ export default function Dashboard() {
       )}
 
       {/* Sidebar */}
-      <aside className="fixed top-0 left-0 h-full w-60 flex flex-col border-r border-surface-border bg-bg-secondary z-40 hidden lg:flex">
+      <aside
+        className="app-sidebar fixed top-0 left-0 h-full w-60 flex flex-col z-40 hidden lg:flex"
+        style={{
+          backgroundColor: 'var(--sidebar-bg)',
+          borderRight: '1px solid var(--sidebar-border)',
+        }}
+      >
         {/* Logo */}
-        <div className="flex items-center gap-3 px-5 h-16 border-b border-surface-border flex-shrink-0">
+        <div
+          className="app-sidebar-logo flex items-center gap-3 px-5 h-16 flex-shrink-0"
+          style={{ borderBottom: '1px solid var(--sidebar-border)' }}
+        >
           <div className="w-8 h-8 rounded-lg bg-brand-gradient flex items-center justify-center">
             <Brain className="w-4 h-4 text-white" />
           </div>
-          <span className="text-sm font-bold text-text-primary">
+          <span className="text-sm font-bold" style={{ color: 'var(--sidebar-text)' }}>
             InterviewSense<span className="gradient-text-brand"> AI</span>
           </span>
         </div>
@@ -542,39 +941,62 @@ export default function Dashboard() {
         {/* Nav */}
         <nav className="flex-1 py-6 px-3 space-y-1">
           {[
-            { icon: BarChart3, label: 'Dashboard', active: true },
+            { icon: BarChart3, label: 'Dashboard', active: true, action: () => navigate('/dashboard') },
             { icon: Play, label: 'New Interview', action: () => setShowNewInterview(true) },
-            { icon: FileText, label: 'My Reports', href: '#' },
-            { icon: TrendingUp, label: 'Progress', href: '#' },
-            { icon: Target, label: 'Practice', href: '#' },
+            { icon: FileText, label: 'My Reports', action: () => navigate('/dashboard') },
+            { icon: TrendingUp, label: 'Progress', action: () => navigate('/progress') },
+            { icon: Target, label: 'Practice', action: () => setShowNewInterview(true) },
           ].map((item) => (
             <button
               key={item.label}
               onClick={item.action}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                item.active
-                  ? 'bg-brand-indigo/10 text-brand-indigo border border-brand-indigo/20'
-                  : 'text-text-secondary hover:text-text-primary hover:bg-surface-hover'
+              className={`app-sidebar-nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium ${
+                item.active ? 'active' : ''
               }`}
+              style={
+                item.active
+                  ? {
+                      backgroundColor: 'var(--sidebar-active-bg)',
+                      color: 'var(--sidebar-active-text)',
+                      borderColor: 'var(--sidebar-active-border)',
+                    }
+                  : {
+                      color: 'var(--sidebar-text)',
+                    }
+              }
             >
-              <item.icon className="w-4 h-4" />
-              {item.label}
+              <item.icon className="w-4 h-4 flex-shrink-0" />
+              <span>{item.label}</span>
             </button>
           ))}
         </nav>
 
         {/* User profile at bottom */}
-        <div className="p-3 border-t border-surface-border flex-shrink-0">
-          <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-surface-hover transition-all cursor-pointer group">
+        <div
+          className="app-sidebar-user p-3 flex-shrink-0"
+          style={{
+            borderTop: '1px solid var(--sidebar-border)',
+            backgroundColor: 'var(--sidebar-bg)',
+          }}
+        >
+          <div className="app-sidebar-user-card flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer group">
             <div className="w-8 h-8 rounded-full bg-brand-gradient flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
               {initials}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-text-primary truncate">{displayName}</p>
-              <p className="text-xs text-text-muted truncate">{profile?.targetRole || 'Set your role'}</p>
+              <p className="text-sm font-semibold truncate" style={{ color: 'var(--sidebar-text)' }}>
+                {displayName}
+              </p>
+              <p className="text-xs truncate" style={{ color: 'var(--sidebar-text-muted)' }}>
+                {profile?.targetRole || 'Set your role'}
+              </p>
             </div>
-            <button onClick={handleLogout} title="Sign out"
-              className="opacity-0 group-hover:opacity-100 transition-opacity text-text-muted hover:text-red-400">
+            <button
+              onClick={handleLogout}
+              title="Sign out"
+              className="opacity-0 group-hover:opacity-100 transition-opacity hover:text-red-500"
+              style={{ color: 'var(--sidebar-text-muted)' }}
+            >
               <LogOut className="w-4 h-4" />
             </button>
           </div>
@@ -582,10 +1004,19 @@ export default function Dashboard() {
       </aside>
 
       {/* Main content */}
-      <main className="lg:ml-60 min-h-screen">
+      <main
+        className="lg:ml-60 min-h-screen transition-colors duration-300"
+        style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}
+      >
         {/* Top bar */}
-        <header className="sticky top-0 z-30 h-16 flex items-center justify-between px-6 border-b border-surface-border"
-          style={{ background: 'rgba(10,10,15,0.8)', backdropFilter: 'blur(16px)' }}>
+        <header
+          className="sticky top-0 z-30 h-16 flex items-center justify-between px-6 border-b transition-colors duration-300"
+          style={{
+            background: 'var(--nav-bg)',
+            borderColor: 'var(--surface-border)',
+            backdropFilter: 'blur(16px)',
+          }}
+        >
           <div>
             <h1 className="text-base font-bold text-text-primary">
               Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'},{' '}
@@ -594,8 +1025,15 @@ export default function Dashboard() {
             <p className="text-xs text-text-muted">{new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
           </div>
           <div className="flex items-center gap-3">
-            <button className="w-9 h-9 rounded-xl flex items-center justify-center text-text-muted hover:text-text-primary transition-colors"
-              style={{ border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.03)' }}>
+            <ThemeToggle id="theme-toggle-dashboard" />
+            <button
+              className="w-9 h-9 rounded-xl flex items-center justify-center transition-colors border"
+              style={{
+                backgroundColor: 'var(--card-bg)',
+                borderColor: 'var(--surface-border)',
+                color: 'var(--text-secondary)',
+              }}
+            >
               <Bell className="w-4 h-4" />
             </button>
             <button
@@ -610,14 +1048,14 @@ export default function Dashboard() {
 
         <div className="p-6 max-w-6xl mx-auto">
           {/* Streak banner */}
-          {(profile?.streak ?? 0) > 0 && (
+          {(currentStreak > 0 || (profile?.streak ?? 0) > 0) && (
             <motion.div
               initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
               className="flex items-center gap-4 p-4 rounded-2xl mb-6"
               style={{ background: 'linear-gradient(135deg, rgba(239,68,68,0.1), rgba(245,158,11,0.1))', border: '1px solid rgba(245,158,11,0.2)' }}>
               <div className="text-3xl">🔥</div>
               <div>
-                <p className="text-text-primary font-bold text-sm">{profile.streak}-day streak! Keep it going!</p>
+                <p className="text-text-primary font-bold text-sm">{currentStreak || profile.streak}-day streak! Keep it going!</p>
                 <p className="text-text-muted text-xs">Practice today to maintain your streak.</p>
               </div>
               <button onClick={() => setShowNewInterview(true)} className="btn-primary ml-auto py-2 px-4 text-sm">
@@ -699,9 +1137,9 @@ export default function Dashboard() {
                           key={item.id}
                           className="p-4 sm:p-5 rounded-2xl transition-all duration-200 hover:border-brand-indigo/40"
                           style={{
-                            background: 'rgba(17, 17, 24, 0.75)',
-                            border: '1px solid rgba(255, 255, 255, 0.07)',
-                            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.25)',
+                            background: 'var(--card-bg)',
+                            border: '1px solid var(--card-border)',
+                            boxShadow: 'var(--card-shadow)',
                           }}
                         >
                           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -789,6 +1227,9 @@ export default function Dashboard() {
                   </div>
                 )}
               </div>
+
+              {/* Your Achievements Section */}
+              <AchievementsSection achievements={achievements} />
             </div>
 
             {/* Right panel */}
@@ -808,7 +1249,7 @@ export default function Dashboard() {
                   <span>Profile complete</span>
                   <span className="text-brand-indigo font-semibold">{profile?.profileComplete ? '100%' : '60%'}</span>
                 </div>
-                <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
+                <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--pill-bg)' }}>
                   <motion.div
                     initial={{ width: 0 }}
                     animate={{ width: profile?.profileComplete ? '100%' : '60%' }}
@@ -831,7 +1272,12 @@ export default function Dashboard() {
 
               {/* Quick start cards */}
               <div>
-                <p className="text-xs font-semibold text-text-secondary mb-3 uppercase tracking-widest">Quick Practice</p>
+                <p
+                  className="text-xs font-semibold mb-3 uppercase tracking-widest"
+                  style={{ color: 'var(--text-secondary)' }}
+                >
+                  Quick Practice
+                </p>
                 <div className="space-y-2">
                   {[
                     { label: 'DSA · Medium', domain: 'DSA', difficulty: 'Medium', type: 'Technical', icon: '🧮' },
@@ -841,12 +1287,21 @@ export default function Dashboard() {
                     <button
                       key={q.label}
                       onClick={() => { navigate('/interview', { state: q }) }}
-                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all hover:bg-surface-hover"
-                      style={{ border: '1px solid rgba(255,255,255,0.06)' }}
+                      className="quick-practice-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all duration-200 group"
+                      style={{
+                        backgroundColor: 'var(--card-bg)',
+                        border: '1px solid var(--card-border)',
+                        boxShadow: 'var(--card-shadow)',
+                      }}
                     >
-                      <span className="text-base">{q.icon}</span>
-                      <span className="text-sm text-text-secondary flex-1">{q.label}</span>
-                      <Play className="w-3.5 h-3.5 text-brand-indigo flex-shrink-0" />
+                      <span className="text-base group-hover:scale-110 transition-transform">{q.icon}</span>
+                      <span
+                        className="text-sm font-medium flex-1 transition-colors group-hover:text-brand-indigo"
+                        style={{ color: 'var(--text-primary)' }}
+                      >
+                        {q.label}
+                      </span>
+                      <Play className="w-3.5 h-3.5 text-brand-indigo flex-shrink-0 group-hover:translate-x-0.5 transition-transform" />
                     </button>
                   ))}
                 </div>

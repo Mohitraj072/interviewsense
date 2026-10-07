@@ -7,6 +7,7 @@ import {
   MessageSquare, Cpu, Target, Github, Twitter, Linkedin,
   Sparkles, Clock, Award, Globe
 } from 'lucide-react'
+import ThemeToggle from '../components/ThemeToggle'
 
 // ─── Animation Variants ───────────────────────────────────────────────────────
 const fadeUp = {
@@ -95,10 +96,11 @@ function Navbar() {
 
         {/* CTA */}
         <div className="hidden md:flex items-center gap-3">
-          <Link to="/dashboard" className="btn-secondary text-sm py-2 px-4">
+          <ThemeToggle id="theme-toggle-landing" />
+          <Link to="/login" className="btn-secondary text-sm py-2 px-4">
             Sign In
           </Link>
-          <Link to="/dashboard" className="btn-primary text-sm py-2 px-4">
+          <Link to="/signup" className="btn-primary text-sm py-2 px-4">
             Get Started Free
             <ArrowRight className="w-3.5 h-3.5" />
           </Link>
@@ -129,9 +131,13 @@ function Navbar() {
               {id.replace('-', ' ')}
             </button>
           ))}
+          <div className="flex items-center justify-between pt-2 border-t border-surface-border">
+            <span className="text-xs text-text-muted font-medium">Appearance</span>
+            <ThemeToggle id="theme-toggle-landing-mobile" />
+          </div>
           <div className="flex flex-col gap-2 pt-2 border-t border-surface-border">
-            <Link to="/dashboard" className="btn-secondary text-sm text-center">Sign In</Link>
-            <Link to="/dashboard" className="btn-primary text-sm justify-center">Get Started Free <ArrowRight className="w-3.5 h-3.5" /></Link>
+            <Link to="/login" className="btn-secondary text-sm text-center">Sign In</Link>
+            <Link to="/signup" className="btn-primary text-sm justify-center">Get Started Free <ArrowRight className="w-3.5 h-3.5" /></Link>
           </div>
         </motion.div>
       )}
@@ -223,7 +229,7 @@ function Hero() {
             transition={{ delay: 0.55, duration: 0.6 }}
             className="flex flex-col sm:flex-row gap-4 items-center justify-center lg:justify-start"
           >
-            <Link to="/dashboard" id="hero-cta-primary" className="btn-primary px-8 py-4 text-base">
+            <Link to="/signup" id="hero-cta-primary" className="btn-primary px-8 py-4 text-base">
               Start Free Interview
               <ArrowRight className="w-4 h-4" />
             </Link>
@@ -739,7 +745,7 @@ function CTABanner() {
               </p>
 
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Link to="/dashboard" id="cta-banner-primary" className="btn-primary px-10 py-4 text-base">
+                <Link to="/signup" id="cta-banner-primary" className="btn-primary px-10 py-4 text-base">
                   Start Your First Interview Free
                   <ArrowRight className="w-4 h-4" />
                 </Link>

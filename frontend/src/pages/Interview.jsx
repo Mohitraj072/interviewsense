@@ -11,6 +11,7 @@ import {
   Boxes,
   Mic,
   MicOff,
+  Keyboard,
   ArrowRight,
   SkipForward,
   CheckCircle2,
@@ -28,6 +29,7 @@ import {
 } from 'lucide-react'
 import axios from 'axios'
 import { useAuth } from '../context/AuthContext'
+import ThemeToggle from '../components/ThemeToggle'
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000'
 
@@ -252,6 +254,8 @@ export default function Interview() {
   const [selectedDomain, setSelectedDomain] = useState('DSA')
   const [difficulty, setDifficulty] = useState('Medium') // 'Easy' | 'Medium' | 'Hard'
   const [questionCount, setQuestionCount] = useState(5) // 5 | 8 | 10
+  const [timePerQuestion, setTimePerQuestion] = useState(120) // in seconds: 0 | 60 | 120 | 180. Default: 2 minutes (120)
+  const [timeLeft, setTimeLeft] = useState(120) // countdown in seconds
   const [loadingQuestions, setLoadingQuestions] = useState(false)
   const [setupError, setSetupError] = useState('')
 
@@ -278,12 +282,29 @@ export default function Interview() {
         setAnswers([])
         setTimerSeconds(0)
         setQuestionStartTime(Date.now())
+        if (incomingState.timePerQuestion !== undefined) {
+          setTimePerQuestion(incomingState.timePerQuestion)
+          setTimeLeft(incomingState.timePerQuestion)
+        }
         setStage('interview')
       } else {
         if (incomingState.type) setInterviewType(incomingState.type)
         if (incomingState.domain) setSelectedDomain(incomingState.domain)
         if (incomingState.difficulty) setDifficulty(incomingState.difficulty)
         if (incomingState.isResumeBased) setIsResumeActive(true)
+        const incomingTime = incomingState.timePerQuestion !== undefined ? incomingState.timePerQuestion : incomingState.timeLimit
+        if (incomingTime !== undefined) {
+          setTimePerQuestion(incomingTime)
+          setTimeLeft(incomingTime)
+        }
+        if (incomingState.autoStart) {
+          handleStartInterview({
+            type: incomingState.type || 'Technical',
+            domain: incomingState.domain || 'DSA',
+            difficulty: incomingState.difficulty || 'Medium',
+            timePerQuestion: incomingTime !== undefined ? incomingTime : 120,
+          })
+        }
       }
     }
   }, [incomingState])
@@ -344,6 +365,15 @@ export default function Interview() {
   const [showExitConfirm, setShowExitConfirm] = useState(false)
   const [isManualEditing, setIsManualEditing] = useState(false)
   const [questionStartTime, setQuestionStartTime] = useState(Date.now())
+  const [inputMode, setInputMode] = useState('voice') // 'voice' | 'text'
+
+  const handleModeChange = (mode) => {
+    if (mode === inputMode) return
+    if (mode === 'text' && isListening) {
+      stopListening()
+    }
+    setInputMode(mode)
+  }
 
   // Speech recognition
   const {
@@ -370,6 +400,68 @@ export default function Interview() {
     }
   }, [stage])
 
+  // Ref to always access latest handleAdvance without stale closures
+  const handleAdvanceRef = useRef(null)
+
+  // Countdown timer per question
+  useEffect(() => {
+    if (stage !== 'interview' || timePerQuestion <= 0) return
+
+    setTimeLeft(timePerQuestion)
+
+    const interval = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          return 0
+        }
+        return prev - 1
+      })
+    }, 1000)
+
+    return () => clearInterval(interval)
+  }, [stage, currentIndex, timePerQuestion])
+
+  // When timer hits 0:00 -> auto submit current answer and move to next question
+  useEffect(() => {
+    if (stage === 'interview' && timePerQuestion > 0 && timeLeft === 0) {
+      if (handleAdvanceRef.current) {
+        handleAdvanceRef.current(false)
+      }
+    }
+  }, [timeLeft, stage, timePerQuestion])
+
+  // Timer visual styling & threshold calculation
+  const getTimerStyles = () => {
+    if (timePerQuestion <= 0) return null
+
+    const ratio = timeLeft / timePerQuestion
+    const isUnder10 = timeLeft <= 10
+
+    if (ratio > 0.5) {
+      // Green when more than 50% time remaining
+      return {
+        containerClass: 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400',
+        iconClass: 'text-emerald-400',
+      }
+    } else if (ratio >= 0.25) {
+      // Yellow when 25-50% remaining
+      return {
+        containerClass: 'bg-amber-500/10 border-amber-500/30 text-amber-400',
+        iconClass: 'text-amber-400',
+      }
+    } else {
+      // Red when less than 25% remaining (with red pulsing animation when under 10 seconds)
+      return {
+        containerClass: `bg-red-500/10 border-red-500/30 text-red-400 ${
+          isUnder10 ? 'animate-pulse border-red-500 shadow-sm shadow-red-500/40' : ''
+        }`,
+        iconClass: 'text-red-400',
+      }
+    }
+  }
+
+  const timerStyles = getTimerStyles()
+
   // Format timer MM:SS
   const formatTimer = (totalSeconds) => {
     const mins = Math.floor(totalSeconds / 60)
@@ -378,12 +470,18 @@ export default function Interview() {
   }
 
   // Start interview handler
-  const handleStartInterview = async () => {
+  const handleStartInterview = async (overrideParams) => {
     setLoadingQuestions(true)
     setSetupError('')
 
+    const useType = overrideParams?.type || interviewType
+    const useDomain = overrideParams?.domain || selectedDomain
+    const useDifficulty = overrideParams?.difficulty || difficulty
+    const useCount = overrideParams?.count || questionCount
+    const useTime = overrideParams?.timePerQuestion !== undefined ? overrideParams.timePerQuestion : timePerQuestion
+
     // Scenario 1: Resume uploaded -> send PDF to POST /api/resume/extract
-    if (resumeFile) {
+    if (resumeFile && !overrideParams) {
       try {
         const formData = new FormData()
         formData.append('resume', resumeFile)
@@ -410,6 +508,7 @@ export default function Interview() {
           setCurrentIndex(0)
           setAnswers([])
           setTimerSeconds(0)
+          setTimeLeft(useTime)
           setQuestionStartTime(Date.now())
           resetTranscript('')
           setStage('interview')
@@ -432,10 +531,10 @@ export default function Interview() {
     setIsResumeActive(false)
     try {
       const response = await axios.post(`${API_BASE}/api/generate-questions`, {
-        type: interviewType,
-        domain: selectedDomain,
-        difficulty,
-        count: questionCount,
+        type: useType,
+        domain: useDomain,
+        difficulty: useDifficulty,
+        count: useCount,
       })
 
       const fetchedList = Array.isArray(response.data)
@@ -452,6 +551,7 @@ export default function Interview() {
         setCurrentIndex(0)
         setAnswers([])
         setTimerSeconds(0)
+        setTimeLeft(useTime)
         setQuestionStartTime(Date.now())
         resetTranscript('')
         setStage('interview')
@@ -462,18 +562,19 @@ export default function Interview() {
       console.warn('Backend question fetch failed, using curated default questions:', err)
       // Fallback questions for smooth client experience
       const defaultQuestions = [
-        `Explain the core architecture and fundamental principles of ${selectedDomain}.`,
-        `What are the most common performance bottlenecks in ${selectedDomain} and how do you mitigate them?`,
-        `Walk me through a real-world scenario where you had to solve a complex ${selectedDomain} challenge.`,
-        `What are the critical trade-offs between speed, scalability, and memory consumption in ${selectedDomain}?`,
-        `Describe the industry best practices for testing, monitoring, and debugging in ${selectedDomain}.`,
-      ].slice(0, questionCount)
+        `Explain the core architecture and fundamental principles of ${useDomain}.`,
+        `What are the most common performance bottlenecks in ${useDomain} and how do you mitigate them?`,
+        `Walk me through a real-world scenario where you had to solve a complex ${useDomain} challenge.`,
+        `What are the critical trade-offs between speed, scalability, and memory consumption in ${useDomain}?`,
+        `Describe the industry best practices for testing, monitoring, and debugging in ${useDomain}.`,
+      ].slice(0, useCount)
 
       setQuestions(defaultQuestions)
       setIsResumeActive(false)
       setCurrentIndex(0)
       setAnswers([])
       setTimerSeconds(0)
+      setTimeLeft(useTime)
       setQuestionStartTime(Date.now())
       resetTranscript('')
       setStage('interview')
@@ -546,8 +647,14 @@ export default function Interview() {
       resetTranscript('')
       setIsManualEditing(false)
       setQuestionStartTime(Date.now())
+      if (timePerQuestion > 0) {
+        setTimeLeft(timePerQuestion)
+      }
     }
   }
+
+  // Keep ref up to date
+  handleAdvanceRef.current = handleAdvance
 
   // Progress percentage
   const progressPercent = questions.length > 0 ? ((currentIndex) / questions.length) * 100 : 0
@@ -557,29 +664,30 @@ export default function Interview() {
   // ─────────────────────────────────────────────────────────────────────────────
   if (stage === 'setup') {
     return (
-      <div className="min-h-screen py-10 px-4 sm:px-6 lg:px-8 text-[#F8F8FF]" style={{ backgroundColor: '#0A0A0F' }}>
+      <div className="min-h-screen py-10 px-4 sm:px-6 lg:px-8 text-text-primary bg-bg-primary transition-colors duration-200">
         <div className="max-w-4xl mx-auto">
           {/* Top navigation */}
           <div className="flex items-center justify-between mb-8">
             <Link
               to="/dashboard"
-              className="inline-flex items-center gap-2 text-xs font-semibold text-[#94A3B8] hover:text-[#F8F8FF] transition-colors py-2 px-3 rounded-lg"
-              style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
+              className="inline-flex items-center gap-2 text-xs font-semibold text-text-secondary hover:text-text-primary transition-colors py-2 px-3 rounded-lg border border-surface-border bg-surface hover:bg-surface-hover"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
               Back to Dashboard
             </Link>
 
-            <div className="flex items-center gap-2">
-              <div
-                className="w-7 h-7 rounded-lg flex items-center justify-center"
-                style={{ background: 'linear-gradient(135deg, #6366F1, #8B5CF6)' }}
-              >
-                <Brain className="w-3.5 h-3.5 text-white" />
+            <div className="flex items-center gap-3">
+              <ThemeToggle id="theme-toggle-interview-setup" />
+              <div className="flex items-center gap-2">
+                <div
+                  className="w-7 h-7 rounded-lg flex items-center justify-center bg-brand-gradient"
+                >
+                  <Brain className="w-3.5 h-3.5 text-white" />
+                </div>
+                <span className="text-xs font-bold tracking-wide text-text-secondary">
+                  INTERVIEW ENGINE <span className="text-[#6366F1]">PHASE 3</span>
+                </span>
               </div>
-              <span className="text-xs font-bold tracking-wide text-[#94A3B8]">
-                INTERVIEW ENGINE <span className="text-[#6366F1]">PHASE 3</span>
-              </span>
             </div>
           </div>
 
@@ -595,10 +703,10 @@ export default function Interview() {
               <Sparkles className="w-3.5 h-3.5" />
               AI Mock Session Configuration
             </div>
-            <h1 className="text-3xl sm:text-4xl font-black text-[#F8F8FF] tracking-tight">
+            <h1 className="text-3xl sm:text-4xl font-black text-text-primary tracking-tight">
               Configure Your Interview
             </h1>
-            <p className="text-sm text-[#94A3B8] mt-2 max-w-xl">
+            <p className="text-sm text-text-secondary mt-2 max-w-xl">
               Choose your domain, interview style, and difficulty. Our Gemini AI will generate tailored questions for your mock session.
             </p>
           </motion.div>
@@ -616,9 +724,9 @@ export default function Interview() {
             <div
               className="p-6 rounded-2xl transition-all duration-200"
               style={{
-                background: 'rgba(17, 17, 24, 0.7)',
-                border: resumeFile ? '1.5px solid rgba(99, 102, 241, 0.5)' : '1px solid #1E1E2E',
-                boxShadow: resumeFile ? '0 0 25px rgba(99, 102, 241, 0.12)' : 'none',
+                background: 'var(--card-bg)',
+                border: resumeFile ? '1.5px solid rgba(99, 102, 241, 0.5)' : '1px solid var(--card-border)',
+                boxShadow: resumeFile ? '0 0 25px rgba(99, 102, 241, 0.12)' : 'var(--card-shadow)',
               }}
             >
               <div className="flex items-center justify-between mb-3">
@@ -718,9 +826,9 @@ export default function Interview() {
             {/* 1. Interview Type */}
             <div
               className="p-6 rounded-2xl"
-              style={{ background: 'rgba(17, 17, 24, 0.7)', border: '1px solid #1E1E2E' }}
+              style={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)', boxShadow: 'var(--card-shadow)' }}
             >
-              <label className="block text-xs font-bold text-[#94A3B8] uppercase tracking-wider mb-3">
+              <label className="block text-xs font-bold text-text-secondary uppercase tracking-wider mb-3">
                 1. Select Interview Type
               </label>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -737,16 +845,16 @@ export default function Interview() {
                       onClick={() => setInterviewType(item.id)}
                       className="p-4 rounded-xl text-left transition-all duration-200 cursor-pointer relative"
                       style={{
-                        background: active ? 'rgba(99, 102, 241, 0.15)' : 'rgba(255,255,255,0.02)',
-                        border: active ? '1.5px solid #6366F1' : '1px solid rgba(255,255,255,0.06)',
+                        background: active ? 'rgba(99, 102, 241, 0.15)' : 'var(--pill-bg)',
+                        border: active ? '1.5px solid #6366F1' : '1px solid var(--surface-border)',
                         boxShadow: active ? '0 0 20px rgba(99, 102, 241, 0.2)' : 'none',
                       }}
                     >
-                      <div className="font-bold text-sm text-[#F8F8FF] flex items-center justify-between">
+                      <div className="font-bold text-sm text-text-primary flex items-center justify-between">
                         {item.label}
                         {active && <Check className="w-4 h-4 text-[#6366F1]" />}
                       </div>
-                      <div className="text-[11px] text-[#94A3B8] mt-1 leading-snug">{item.desc}</div>
+                      <div className="text-[11px] text-text-muted mt-1 leading-snug">{item.desc}</div>
                     </button>
                   )
                 })}
@@ -756,9 +864,9 @@ export default function Interview() {
             {/* 2. Select Domain / Topic */}
             <div
               className="p-6 rounded-2xl"
-              style={{ background: 'rgba(17, 17, 24, 0.7)', border: '1px solid #1E1E2E' }}
+              style={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)', boxShadow: 'var(--card-shadow)' }}
             >
-              <label className="block text-xs font-bold text-[#94A3B8] uppercase tracking-wider mb-3">
+              <label className="block text-xs font-bold text-text-secondary uppercase tracking-wider mb-3">
                 2. Select Domain / Topic
               </label>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -772,8 +880,8 @@ export default function Interview() {
                       onClick={() => setSelectedDomain(domain.id)}
                       className="p-4 rounded-xl text-left transition-all duration-200 cursor-pointer relative group"
                       style={{
-                        background: active ? 'rgba(99, 102, 241, 0.14)' : 'rgba(255,255,255,0.02)',
-                        border: active ? '1.5px solid #6366F1' : '1px solid rgba(255,255,255,0.06)',
+                        background: active ? 'rgba(99, 102, 241, 0.14)' : 'var(--pill-bg)',
+                        border: active ? '1.5px solid #6366F1' : '1px solid var(--surface-border)',
                         boxShadow: active ? '0 0 24px rgba(99, 102, 241, 0.22)' : 'none',
                       }}
                     >
@@ -784,13 +892,13 @@ export default function Interview() {
                         style={{
                           background: active
                             ? 'linear-gradient(135deg, #6366F1, #8B5CF6)'
-                            : 'rgba(255,255,255,0.05)',
+                            : 'var(--pill-bg)',
                         }}
                       >
-                        <Icon className={`w-4 h-4 ${active ? 'text-white' : 'text-[#94A3B8]'}`} />
+                        <Icon className={`w-4 h-4 ${active ? 'text-white' : 'text-text-muted'}`} />
                       </div>
-                      <div className="font-bold text-sm text-[#F8F8FF]">{domain.title}</div>
-                      <div className="text-[11px] text-[#94A3B8] mt-1 line-clamp-1">{domain.desc}</div>
+                      <div className="font-bold text-sm text-text-primary">{domain.title}</div>
+                      <div className="text-[11px] text-text-muted mt-1 line-clamp-1">{domain.desc}</div>
                     </button>
                   )
                 })}
@@ -802,9 +910,9 @@ export default function Interview() {
               {/* Difficulty */}
               <div
                 className="p-6 rounded-2xl"
-                style={{ background: 'rgba(17, 17, 24, 0.7)', border: '1px solid #1E1E2E' }}
+                style={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)', boxShadow: 'var(--card-shadow)' }}
               >
-                <label className="block text-xs font-bold text-[#94A3B8] uppercase tracking-wider mb-3">
+                <label className="block text-xs font-bold text-text-secondary uppercase tracking-wider mb-3">
                   3. Difficulty Level
                 </label>
                 <div className="grid grid-cols-3 gap-2">
@@ -821,9 +929,9 @@ export default function Interview() {
                         onClick={() => setDifficulty(lvl.id)}
                         className="py-3 px-2 rounded-xl text-center transition-all duration-200 cursor-pointer"
                         style={{
-                          background: active ? `${lvl.color}15` : 'rgba(255,255,255,0.02)',
-                          border: active ? `1.5px solid ${lvl.color}` : '1px solid rgba(255,255,255,0.06)',
-                          color: active ? lvl.color : '#94A3B8',
+                          background: active ? `${lvl.color}15` : 'var(--pill-bg)',
+                          border: active ? `1.5px solid ${lvl.color}` : '1px solid var(--surface-border)',
+                          color: active ? lvl.color : 'var(--text-secondary)',
                         }}
                       >
                         <div className="font-bold text-xs">{lvl.label}</div>
@@ -837,9 +945,9 @@ export default function Interview() {
               {/* Number of Questions */}
               <div
                 className="p-6 rounded-2xl"
-                style={{ background: 'rgba(17, 17, 24, 0.7)', border: '1px solid #1E1E2E' }}
+                style={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)', boxShadow: 'var(--card-shadow)' }}
               >
-                <label className="block text-xs font-bold text-[#94A3B8] uppercase tracking-wider mb-3">
+                <label className="block text-xs font-bold text-text-secondary uppercase tracking-wider mb-3">
                   4. Number of Questions
                 </label>
                 <div className="grid grid-cols-3 gap-2">
@@ -856,17 +964,70 @@ export default function Interview() {
                         onClick={() => setQuestionCount(q.count)}
                         className="py-3 px-2 rounded-xl text-center transition-all duration-200 cursor-pointer"
                         style={{
-                          background: active ? 'rgba(99, 102, 241, 0.15)' : 'rgba(255,255,255,0.02)',
-                          border: active ? '1.5px solid #6366F1' : '1px solid rgba(255,255,255,0.06)',
-                          color: active ? '#F8F8FF' : '#94A3B8',
+                          background: active ? 'rgba(99, 102, 241, 0.15)' : 'var(--pill-bg)',
+                          border: active ? '1.5px solid #6366F1' : '1px solid var(--surface-border)',
+                          color: active ? '#818CF8' : 'var(--text-secondary)',
                         }}
                       >
                         <div className="font-black text-base">{q.count}</div>
-                        <div className="text-[10px] text-[#94A3B8] mt-0.5">{q.time}</div>
+                        <div className="text-[10px] text-text-muted mt-0.5">{q.time}</div>
                       </button>
                     )
                   })}
                 </div>
+              </div>
+            </div>
+
+            {/* Time per Question */}
+            <div
+              className="p-6 rounded-2xl"
+              style={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)', boxShadow: 'var(--card-shadow)' }}
+            >
+              <div className="flex items-center justify-between mb-3">
+                <label className="block text-xs font-bold text-text-secondary uppercase tracking-wider">
+                  Time per Question
+                </label>
+                <span className="text-[11px] text-text-muted flex items-center gap-1">
+                  <Clock className="w-3.5 h-3.5 text-[#6366F1]" /> Auto-submits when time expires
+                </span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
+                {[
+                  { id: 'no-limit', seconds: 0, label: 'No Limit', desc: 'No timer' },
+                  { id: '1-min', seconds: 60, label: '1 minute', desc: 'Fast pace' },
+                  { id: '2-min', seconds: 120, label: '2 minutes', desc: 'Standard', recommended: true },
+                  { id: '3-min', seconds: 180, label: '3 minutes', desc: 'In-depth' },
+                ].map((opt) => {
+                  const active = timePerQuestion === opt.seconds
+                  return (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => setTimePerQuestion(opt.seconds)}
+                      className="relative py-3.5 px-3 rounded-xl text-center transition-all duration-200 cursor-pointer flex flex-col items-center justify-center"
+                      style={{
+                        background: active ? 'rgba(99, 102, 241, 0.15)' : 'var(--pill-bg)',
+                        border: active ? '1.5px solid #6366F1' : '1px solid var(--surface-border)',
+                        color: active ? '#818CF8' : 'var(--text-secondary)',
+                        boxShadow: active ? '0 0 20px rgba(99, 102, 241, 0.2)' : 'none',
+                      }}
+                    >
+                      {opt.recommended && (
+                        <span
+                          className="absolute -top-2.5 px-2 py-0.5 rounded-full text-[9px] font-extrabold text-white tracking-wider shadow-sm uppercase"
+                          style={{
+                            background: 'linear-gradient(135deg, #6366F1, #8B5CF6)',
+                            border: '1px solid rgba(255, 255, 255, 0.25)',
+                          }}
+                        >
+                          Recommended
+                        </span>
+                      )}
+                      <div className="font-bold text-xs">{opt.label}</div>
+                      <div className="text-[10px] opacity-75 mt-0.5">{opt.desc}</div>
+                    </button>
+                  )
+                })}
               </div>
             </div>
 
@@ -911,9 +1072,9 @@ export default function Interview() {
   const currentFillerCount = countFillers(transcript)
 
   return (
-    <div className="min-h-screen flex flex-col text-[#F8F8FF]" style={{ backgroundColor: '#0A0A0F' }}>
+    <div className="min-h-screen flex flex-col text-text-primary bg-bg-primary transition-colors duration-200">
       {/* Top Fixed Progress Bar */}
-      <div className="w-full h-1 bg-white/5 relative">
+      <div className="w-full h-1 bg-surface-border relative">
         <motion.div
           className="h-full bg-gradient-to-r from-[#6366F1] to-[#8B5CF6]"
           initial={{ width: 0 }}
@@ -924,25 +1085,38 @@ export default function Interview() {
 
       {/* Top Bar Header */}
       <header
-        className="px-4 sm:px-8 py-3.5 border-b flex items-center justify-between"
-        style={{ borderColor: 'rgba(255,255,255,0.06)', background: 'rgba(10, 10, 15, 0.85)', backdropFilter: 'blur(8px)' }}
+        className="px-4 sm:px-8 py-3.5 border-b border-surface-border flex items-center justify-between"
+        style={{ background: 'var(--nav-bg)', backdropFilter: 'blur(8px)' }}
       >
-        {/* Left: Question counter badge */}
+        {/* Left: Question counter badge & Countdown timer */}
         <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={() => setShowExitConfirm(true)}
-            className="p-1.5 rounded-lg text-[#94A3B8] hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
+            className="p-1.5 rounded-lg text-text-muted hover:text-text-primary hover:bg-surface-hover transition-colors cursor-pointer"
             title="Exit interview"
           >
             <X className="w-4 h-4" />
           </button>
-          <div className="h-4 w-px bg-white/10" />
+          <div className="h-4 w-px bg-surface-border" />
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-xs font-extrabold px-2.5 py-1 rounded-md bg-[#6366F1]/20 text-[#818CF8] border border-[#6366F1]/30">
               Q {currentIndex + 1} / {questions.length}
             </span>
-            <span className="hidden sm:inline-block text-xs font-semibold text-[#94A3B8]">
+
+            {/* Countdown Timer next to question counter */}
+            {timePerQuestion > 0 && timerStyles && (
+              <div
+                id="interview-countdown-timer"
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono font-bold border transition-colors ${timerStyles.containerClass}`}
+                title="Time remaining for this question"
+              >
+                <Clock className={`w-3.5 h-3.5 ${timerStyles.iconClass}`} />
+                <span>{formatTimer(timeLeft)}</span>
+              </div>
+            )}
+
+            <span className="hidden sm:inline-block text-xs font-semibold text-text-secondary">
               {selectedDomain} • {difficulty}
             </span>
             {isResumeActive && (
@@ -954,23 +1128,18 @@ export default function Interview() {
           </div>
         </div>
 
-        {/* Center: Live Timer */}
-        <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-xs font-mono text-[#F8F8FF]">
-          <Clock className="w-3.5 h-3.5 text-[#6366F1]" />
-          <span>{formatTimer(timerSeconds)}</span>
-        </div>
-
-        {/* Right: Topic / Mode */}
-        <div className="flex items-center gap-2 text-xs font-semibold text-[#94A3B8]">
+        {/* Right: Topic / Mode & Theme Toggle */}
+        <div className="flex items-center gap-2.5 text-xs font-semibold text-text-secondary">
           {isResumeActive && (
-            <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 text-[11px]">
+            <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[11px]">
               <FileText className="w-3 h-3" />
               Tailored to Resume
             </span>
           )}
-          <span className="px-2.5 py-0.5 rounded bg-white/5 border border-white/10">
+          <span className="px-2.5 py-1 rounded-lg bg-surface border border-surface-border text-text-primary">
             {interviewType}
           </span>
+          <ThemeToggle id="theme-toggle-interview-live" />
         </div>
       </header>
 
@@ -985,9 +1154,9 @@ export default function Interview() {
           transition={{ duration: 0.35 }}
           className="p-6 sm:p-8 rounded-2xl relative overflow-hidden"
           style={{
-            background: 'rgba(17, 17, 24, 0.8)',
-            border: '1px solid #1E1E2E',
-            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
+            background: 'var(--card-bg)',
+            border: '1px solid var(--card-border)',
+            boxShadow: 'var(--card-shadow)',
           }}
         >
           <div className="flex items-center justify-between mb-3 text-xs font-semibold">
@@ -1002,139 +1171,262 @@ export default function Interview() {
                 Interview Question {currentIndex + 1}
               </span>
             )}
-            <span className="text-[#94A3B8] font-normal">Speak clearly into your microphone</span>
+            <span className="text-text-muted font-normal">
+              {inputMode === 'voice' ? 'Speak clearly into your microphone' : 'Type your answer in the box below'}
+            </span>
           </div>
 
-          <h2 className="text-xl sm:text-2xl font-bold text-[#F8F8FF] leading-relaxed">
+          <h2 className="text-xl sm:text-2xl font-bold text-text-primary leading-relaxed">
             {currentQuestion}
           </h2>
         </motion.div>
 
-        {/* Center Microphone & Recording Section */}
-        <div className="my-8 flex flex-col items-center justify-center">
-          {/* Waveform visualizer */}
-          <AudioWaveform isRecording={isListening} />
+        {/* Center Microphone & Recording Section (Voice Mode only) */}
+        <AnimatePresence mode="wait">
+          {inputMode === 'voice' && (
+            <motion.div
+              key="voice-controls"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.2 }}
+              className="my-6 flex flex-col items-center justify-center"
+            >
+              {/* Waveform visualizer */}
+              <AudioWaveform isRecording={isListening} />
 
-          {/* Large Microphone Button */}
-          <div className="relative mt-2 mb-3">
-            {/* Pulsing ring animation when listening */}
-            {isListening && (
-              <>
+              {/* Large Microphone Button */}
+              <div className="relative mt-2 mb-3">
+                {/* Pulsing ring animation when listening */}
+                {isListening && (
+                  <>
+                    <motion.div
+                      className="absolute inset-0 rounded-full bg-[#EF4444]"
+                      animate={{ scale: [1, 1.45, 1.7], opacity: [0.6, 0.3, 0] }}
+                      transition={{ repeat: Infinity, duration: 1.8, ease: 'easeOut' }}
+                    />
+                    <motion.div
+                      className="absolute inset-0 rounded-full bg-[#6366F1]"
+                      animate={{ scale: [1, 1.25, 1.5], opacity: [0.5, 0.2, 0] }}
+                      transition={{ repeat: Infinity, duration: 1.8, ease: 'easeOut', delay: 0.4 }}
+                    />
+                  </>
+                )}
+
+                <button
+                  id="btn-mic-toggle"
+                  type="button"
+                  onClick={toggleRecording}
+                  className="relative z-10 w-20 h-20 sm:w-24 sm:h-24 rounded-full flex items-center justify-center transition-all duration-300 cursor-pointer shadow-xl"
+                  style={{
+                    background: isListening
+                      ? 'linear-gradient(135deg, #EF4444, #DC2626)'
+                      : 'linear-gradient(135deg, #6366F1, #8B5CF6)',
+                    boxShadow: isListening
+                      ? '0 0 40px rgba(239, 68, 68, 0.5)'
+                      : '0 0 35px rgba(99, 102, 241, 0.4)',
+                  }}
+                >
+                  {isListening ? (
+                    <MicOff className="w-8 h-8 text-white" />
+                  ) : (
+                    <Mic className="w-8 h-8 text-white" />
+                  )}
+                </button>
+              </div>
+
+              <div className="text-center">
+                <span
+                  className={`text-xs font-semibold uppercase tracking-wider ${
+                    isListening ? 'text-[#EF4444]' : 'text-[#94A3B8]'
+                  }`}
+                >
+                  {isListening ? 'Recording active • Click to Stop' : 'Click microphone to start speaking'}
+                </span>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Mode Toggle Switch (Below the microphone button) */}
+        <div className="flex items-center justify-center mb-5">
+          <div
+            className="p-1 rounded-xl flex items-center gap-1 relative"
+            style={{
+              background: 'var(--pill-bg)',
+              border: '1px solid var(--surface-border)',
+            }}
+          >
+            <button
+              id="mode-toggle-voice"
+              type="button"
+              onClick={() => handleModeChange('voice')}
+              className={`relative z-10 flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+                inputMode === 'voice' ? 'text-white' : 'text-text-secondary hover:text-text-primary'
+              }`}
+            >
+              <Mic className="w-3.5 h-3.5" />
+              <span>Voice</span>
+              {inputMode === 'voice' && (
                 <motion.div
-                  className="absolute inset-0 rounded-full bg-[#EF4444]"
-                  animate={{ scale: [1, 1.45, 1.7], opacity: [0.6, 0.3, 0] }}
-                  transition={{ repeat: Infinity, duration: 1.8, ease: 'easeOut' }}
+                  layoutId="activeInputModePill"
+                  className="absolute inset-0 rounded-lg shadow-sm"
+                  style={{
+                    background: 'linear-gradient(135deg, #6366F1, #8B5CF6)',
+                    zIndex: -1,
+                  }}
+                  transition={{ type: 'spring', stiffness: 500, damping: 35 }}
                 />
-                <motion.div
-                  className="absolute inset-0 rounded-full bg-[#6366F1]"
-                  animate={{ scale: [1, 1.25, 1.5], opacity: [0.5, 0.2, 0] }}
-                  transition={{ repeat: Infinity, duration: 1.8, ease: 'easeOut', delay: 0.4 }}
-                />
-              </>
-            )}
+              )}
+            </button>
 
             <button
-              id="btn-mic-toggle"
+              id="mode-toggle-text"
               type="button"
-              onClick={toggleRecording}
-              className="relative z-10 w-20 h-20 sm:w-24 sm:h-24 rounded-full flex items-center justify-center transition-all duration-300 cursor-pointer shadow-xl"
-              style={{
-                background: isListening
-                  ? 'linear-gradient(135deg, #EF4444, #DC2626)'
-                  : 'linear-gradient(135deg, #6366F1, #8B5CF6)',
-                boxShadow: isListening
-                  ? '0 0 40px rgba(239, 68, 68, 0.5)'
-                  : '0 0 35px rgba(99, 102, 241, 0.4)',
-              }}
+              onClick={() => handleModeChange('text')}
+              className={`relative z-10 flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+                inputMode === 'text' ? 'text-white' : 'text-[#94A3B8] hover:text-white'
+              }`}
             >
-              {isListening ? (
-                <MicOff className="w-8 h-8 text-white" />
-              ) : (
-                <Mic className="w-8 h-8 text-white" />
+              <Keyboard className="w-3.5 h-3.5" />
+              <span>Text</span>
+              {inputMode === 'text' && (
+                <motion.div
+                  layoutId="activeInputModePill"
+                  className="absolute inset-0 rounded-lg shadow-sm"
+                  style={{
+                    background: 'linear-gradient(135deg, #6366F1, #8B5CF6)',
+                    zIndex: -1,
+                  }}
+                  transition={{ type: 'spring', stiffness: 500, damping: 35 }}
+                />
               )}
             </button>
           </div>
+        </div>
 
-          <div className="text-center">
-            <span
-              className={`text-xs font-semibold uppercase tracking-wider ${
-                isListening ? 'text-[#EF4444]' : 'text-[#94A3B8]'
-              }`}
+        {/* Dynamic Response Box: Voice vs Text */}
+        <AnimatePresence mode="wait">
+          {inputMode === 'voice' ? (
+            <motion.div
+              key="voice-transcript-box"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.2 }}
+              className="p-5 sm:p-6 rounded-2xl relative"
+              style={{ background: 'rgba(17, 17, 24, 0.6)', border: '1px solid rgba(255,255,255,0.08)' }}
             >
-              {isListening ? 'Recording active • Click to Stop' : 'Click microphone to start speaking'}
-            </span>
-          </div>
-        </div>
-
-        {/* Speech-to-Text Transcription Box */}
-        <div
-          className="p-5 sm:p-6 rounded-2xl relative"
-          style={{ background: 'rgba(17, 17, 24, 0.6)', border: '1px solid rgba(255,255,255,0.08)' }}
-        >
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-[#94A3B8] uppercase tracking-wider">
-                Real-Time Transcript
-              </span>
-              {isListening && (
-                <span className="flex items-center gap-1.5 text-[11px] text-green-400">
-                  <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-                  Listening...
-                </span>
-              )}
-            </div>
-
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => setIsManualEditing(!isManualEditing)}
-                className="text-[11px] font-medium text-[#6366F1] hover:text-[#818CF8] flex items-center gap-1 transition-colors cursor-pointer"
-              >
-                <Edit3 className="w-3 h-3" />
-                {isManualEditing ? 'Save Edit' : 'Edit Response'}
-              </button>
-            </div>
-          </div>
-
-          {/* Transcript Display or Manual Edit textarea */}
-          {isManualEditing ? (
-            <textarea
-              value={transcript}
-              onChange={(e) => setTranscript(e.target.value)}
-              placeholder="Type or edit your answer here..."
-              rows={4}
-              className="w-full bg-black/30 text-sm text-[#F8F8FF] p-3 rounded-xl border border-white/10 focus:border-[#6366F1] outline-none resize-none"
-            />
-          ) : (
-            <div className="min-h-[90px] max-h-[140px] overflow-y-auto text-sm leading-relaxed text-[#F8F8FF]">
-              {transcript ? (
-                <>
-                  <span>{transcript}</span>
-                  {interimTranscript && (
-                    <span className="text-[#94A3B8] italic"> {interimTranscript}</span>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-[#94A3B8] uppercase tracking-wider">
+                    Real-Time Transcript
+                  </span>
+                  {isListening && (
+                    <span className="flex items-center gap-1.5 text-[11px] text-green-400">
+                      <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+                      Listening...
+                    </span>
                   )}
-                </>
-              ) : (
-                <span className="text-[#475569] italic">
-                  Your speech will be transcribed here automatically as you answer the question...
-                </span>
-              )}
-            </div>
-          )}
+                </div>
 
-          {/* Transcript stats footer */}
-          <div className="mt-3 pt-2.5 border-t border-white/5 flex items-center justify-between text-[11px] text-[#94A3B8]">
-            <div className="flex items-center gap-4">
-              <span>Words: <strong className="text-white">{currentWordCount}</strong></span>
-              <span>Filler words: <strong className={currentFillerCount > 3 ? 'text-amber-400' : 'text-white'}>{currentFillerCount}</strong></span>
-            </div>
-            {!isSupported && (
-              <span className="text-amber-400 flex items-center gap-1">
-                <AlertCircle className="w-3 h-3" /> Speech API not supported in this browser. Use manual typing.
-              </span>
-            )}
-          </div>
-        </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setIsManualEditing(!isManualEditing)}
+                    className="text-[11px] font-medium text-[#6366F1] hover:text-[#818CF8] flex items-center gap-1 transition-colors cursor-pointer"
+                  >
+                    <Edit3 className="w-3 h-3" />
+                    {isManualEditing ? 'Save Edit' : 'Edit Response'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Transcript Display or Manual Edit textarea */}
+              {isManualEditing ? (
+                <textarea
+                  value={transcript}
+                  onChange={(e) => setTranscript(e.target.value)}
+                  placeholder="Type or edit your answer here..."
+                  rows={4}
+                  className="w-full bg-black/30 text-sm text-[#F8F8FF] p-3 rounded-xl border border-white/10 focus:border-[#6366F1] outline-none resize-none"
+                />
+              ) : (
+                <div className="min-h-[90px] max-h-[140px] overflow-y-auto text-sm leading-relaxed text-[#F8F8FF]">
+                  {transcript ? (
+                    <>
+                      <span>{transcript}</span>
+                      {interimTranscript && (
+                        <span className="text-[#94A3B8] italic"> {interimTranscript}</span>
+                      )}
+                    </>
+                  ) : (
+                    <span className="text-[#475569] italic">
+                      Your speech will be transcribed here automatically as you answer the question...
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {/* Transcript stats footer */}
+              <div className="mt-3 pt-2.5 border-t border-white/5 flex items-center justify-between text-[11px] text-[#94A3B8]">
+                <div className="flex items-center gap-4">
+                  <span>Words: <strong className="text-white">{currentWordCount}</strong></span>
+                  <span>Filler words: <strong className={currentFillerCount > 3 ? 'text-amber-400' : 'text-white'}>{currentFillerCount}</strong></span>
+                </div>
+                {!isSupported && (
+                  <span className="text-amber-400 flex items-center gap-1">
+                    <AlertCircle className="w-3 h-3" /> Speech API not supported in this browser. Use manual typing.
+                  </span>
+                )}
+              </div>
+            </motion.div>
+          ) : (
+            <motion.div
+              key="text-answer-box"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.2 }}
+              className="p-5 sm:p-6 rounded-2xl relative flex flex-col flex-1"
+              style={{
+                background: 'var(--card-bg)',
+                border: '1px solid var(--card-border)',
+                boxShadow: 'var(--card-shadow)',
+              }}
+            >
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-bold text-text-secondary uppercase tracking-wider flex items-center gap-1.5">
+                  <Keyboard className="w-3.5 h-3.5 text-[#6366F1]" />
+                  Text Response
+                </span>
+                <span className="text-[11px] text-text-muted">
+                  Type your complete answer below
+                </span>
+              </div>
+
+              <textarea
+                id="text-mode-answer-textarea"
+                value={transcript}
+                onChange={(e) => setTranscript(e.target.value)}
+                placeholder="Type your answer here..."
+                rows={7}
+                className="w-full bg-surface text-sm text-text-primary placeholder:text-text-muted p-4 rounded-xl border border-surface-border focus:border-[#6366F1] focus:ring-1 focus:ring-[#6366F1]/40 outline-none resize-none leading-relaxed transition-colors min-h-[160px] max-h-[240px]"
+              />
+
+              {/* Word count footer */}
+              <div className="mt-3 pt-2.5 border-t border-surface-border flex items-center justify-between text-[11px] text-text-secondary">
+                <div className="flex items-center gap-4">
+                  <span>Words: <strong className="text-text-primary">{currentWordCount}</strong></span>
+                  <span>Characters: <strong className="text-text-primary">{transcript.length}</strong></span>
+                </div>
+                <span className="text-text-muted">
+                  Click "Submit Answer" when finished
+                </span>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Action Bottom Bar */}
         <div className="mt-6 flex items-center justify-between gap-4">
@@ -1142,8 +1434,7 @@ export default function Interview() {
             id="btn-skip-question"
             type="button"
             onClick={() => handleAdvance(true)}
-            className="inline-flex items-center gap-2 px-5 py-3 rounded-xl text-xs font-semibold text-[#94A3B8] hover:text-white transition-colors cursor-pointer"
-            style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}
+            className="btn-secondary px-5 py-3 text-xs font-semibold cursor-pointer"
           >
             <SkipForward className="w-4 h-4" />
             <span>Skip Question</span>
@@ -1174,18 +1465,17 @@ export default function Interview() {
               initial={{ scale: 0.95, y: 10 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.95, y: 10 }}
-              className="w-full max-w-sm p-6 rounded-2xl"
-              style={{ background: '#111118', border: '1px solid rgba(255,255,255,0.1)' }}
+              className="glass-card w-full max-w-sm p-6"
             >
-              <h3 className="text-base font-bold text-[#F8F8FF] mb-2">Leave Interview Session?</h3>
-              <p className="text-xs text-[#94A3B8] mb-6 leading-relaxed">
+              <h3 className="text-base font-bold text-text-primary mb-2">Leave Interview Session?</h3>
+              <p className="text-xs text-text-secondary mb-6 leading-relaxed">
                 Your current answers in this session will not be saved if you leave before completing all questions.
               </p>
               <div className="flex items-center justify-end gap-3">
                 <button
                   type="button"
                   onClick={() => setShowExitConfirm(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold text-[#94A3B8] hover:text-white cursor-pointer"
+                  className="btn-secondary px-4 py-2 text-xs"
                 >
                   Stay
                 </button>

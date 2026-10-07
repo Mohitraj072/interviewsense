@@ -1,5 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
+import { ThemeProvider } from './context/ThemeContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import Landing from './pages/Landing'
 import Login from './pages/Login'
@@ -7,12 +8,17 @@ import Signup from './pages/Signup'
 import Dashboard from './pages/Dashboard'
 import Interview from './pages/Interview'
 import Report from './pages/Report'
+import Progress from './pages/Progress'
 
 function App() {
   return (
-    <AuthProvider>
-      <Router>
-        <div className="min-h-screen" style={{ backgroundColor: '#0A0A0F' }}>
+    <ThemeProvider>
+      <AuthProvider>
+        <Router>
+          <div
+            className="min-h-screen bg-bg-primary text-text-primary transition-colors duration-200"
+            style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}
+          >
           <Routes>
             {/* Public */}
             <Route path="/" element={<Landing />} />
@@ -22,6 +28,9 @@ function App() {
             {/* Protected */}
             <Route path="/dashboard" element={
               <ProtectedRoute><Dashboard /></ProtectedRoute>
+            } />
+            <Route path="/progress" element={
+              <ProtectedRoute><Progress /></ProtectedRoute>
             } />
             <Route path="/interview" element={
               <ProtectedRoute><Interview /></ProtectedRoute>
@@ -39,6 +48,7 @@ function App() {
         </div>
       </Router>
     </AuthProvider>
+  </ThemeProvider>
   )
 }
 

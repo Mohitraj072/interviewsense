@@ -10,6 +10,7 @@ import {
 import { doc, getDoc, collection, addDoc, serverTimestamp } from 'firebase/firestore'
 import { auth, db } from '../firebase'
 import { useAuth } from '../context/AuthContext'
+import ThemeToggle from '../components/ThemeToggle'
 import axios from 'axios'
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000'
@@ -36,7 +37,7 @@ function ScoreGauge({ score = 0, verdict = 'Strong' }) {
           cx="88"
           cy="88"
           r={radius}
-          stroke="rgba(255, 255, 255, 0.06)"
+          stroke="var(--surface-border)"
           strokeWidth="12"
           fill="transparent"
         />
@@ -124,7 +125,7 @@ function SkillRadarSVG({ skills = {} }) {
               key={level}
               points={webPoints}
               fill="transparent"
-              stroke="rgba(255, 255, 255, 0.07)"
+              stroke="var(--surface-border)"
               strokeWidth="1"
             />
           )
@@ -140,7 +141,7 @@ function SkillRadarSVG({ skills = {} }) {
               y1={center}
               x2={outer.x}
               y2={outer.y}
-              stroke="rgba(255, 255, 255, 0.1)"
+              stroke="var(--surface-border)"
               strokeWidth="1"
             />
           )
@@ -186,7 +187,7 @@ function SkillRadarSVG({ skills = {} }) {
               y={outer.y}
               textAnchor="middle"
               dominantBaseline="middle"
-              className="text-[10px] fill-slate-300 font-medium"
+              className="text-[10px] fill-current text-text-secondary font-medium"
             >
               {axis.label} ({val}%)
             </text>
@@ -562,18 +563,17 @@ export default function Report() {
     <div className="min-h-screen bg-bg-primary text-text-primary print:bg-white print:text-black">
       {/* Top Navigation */}
       <header className="sticky top-0 z-40 h-16 border-b border-surface-border px-6 flex items-center justify-between print:hidden"
-        style={{ background: 'rgba(10,10,15,0.85)', backdropFilter: 'blur(16px)' }}>
+        style={{ background: 'var(--nav-bg)', backdropFilter: 'blur(16px)' }}>
         <div className="flex items-center gap-3">
           <button
             onClick={() => navigate('/dashboard')}
-            className="flex items-center gap-2 text-xs font-semibold text-text-muted hover:text-text-primary transition-colors py-2 px-3 rounded-xl"
-            style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}
+            className="btn-secondary py-2 px-3 text-xs"
           >
             <ArrowLeft className="w-4 h-4" /> Dashboard
           </button>
           <div className="h-4 w-px bg-surface-border" />
           <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-surface-border text-text-primary">
+            <span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-surface border border-surface-border text-text-primary">
               {sessionMeta?.config?.domain || 'Technical'}
             </span>
             <span className="text-xs text-text-muted">
@@ -583,6 +583,7 @@ export default function Report() {
         </div>
 
         <div className="flex items-center gap-2.5">
+          <ThemeToggle id="theme-toggle-report" />
           <button
             onClick={handleShare}
             className="btn-secondary py-2 px-3 text-xs"
@@ -774,7 +775,7 @@ export default function Report() {
                   key={index}
                   className="glass-card transition-all overflow-hidden"
                   style={{
-                    borderColor: isExpanded ? 'rgba(99,102,241,0.4)' : 'rgba(255,255,255,0.07)',
+                    borderColor: isExpanded ? 'rgba(99,102,241,0.4)' : 'var(--surface-border)',
                   }}
                 >
                   <button
@@ -829,7 +830,7 @@ export default function Report() {
 
                       {/* AI Detailed Feedback */}
                       {item.feedback && (
-                        <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/10">
+                        <div className="p-3.5 rounded-xl bg-surface border border-surface-border">
                           <p className="font-semibold text-text-muted mb-1 flex items-center gap-1.5">
                             <CheckCircle2 className="w-3.5 h-3.5 text-brand-indigo" /> AI Assessment & Feedback:
                           </p>
