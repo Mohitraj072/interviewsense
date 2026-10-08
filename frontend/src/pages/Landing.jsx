@@ -89,7 +89,7 @@ function Navbar() {
               onClick={() => scrollTo(id)}
               className="text-sm text-text-secondary hover:text-text-primary transition-colors capitalize"
             >
-              {id.replace('-', ' ')}
+              {id.replace(/-/g, ' ')}
             </button>
           ))}
         </div>
@@ -128,7 +128,7 @@ function Navbar() {
         >
           {['features', 'how-it-works', 'testimonials'].map((id) => (
             <button key={id} onClick={() => scrollTo(id)} className="text-text-secondary text-sm text-left capitalize hover:text-text-primary">
-              {id.replace('-', ' ')}
+              {id.replace(/-/g, ' ')}
             </button>
           ))}
           <div className="flex items-center justify-between pt-2 border-t border-surface-border">
@@ -229,15 +229,19 @@ function Hero() {
             transition={{ delay: 0.55, duration: 0.6 }}
             className="flex flex-col sm:flex-row gap-4 items-center justify-center lg:justify-start"
           >
-            <Link to="/signup" id="hero-cta-primary" className="btn-primary w-full sm:w-auto px-6 sm:px-8 py-3.5 sm:py-4 text-base justify-center">
+            <Link
+              to="/signup"
+              id="hero-cta-primary"
+              className="btn-primary w-full sm:w-auto px-5 sm:px-6 py-3.5 text-sm sm:text-base sm:whitespace-nowrap justify-center"
+            >
               Start Free Interview
-              <ArrowRight className="w-4 h-4" />
+              <ArrowRight className="w-4 h-4 flex-shrink-0" />
             </Link>
             <button
               id="hero-watch-demo"
-              className="btn-secondary w-full sm:w-auto px-6 sm:px-8 py-3.5 sm:py-4 text-base flex items-center justify-center gap-3"
+              className="btn-secondary w-full sm:w-auto px-5 sm:px-6 py-3.5 text-sm sm:text-base sm:whitespace-nowrap flex items-center justify-center gap-3"
             >
-              <div className="w-7 h-7 rounded-full flex items-center justify-center" style={{ background: 'rgba(99,102,241,0.15)' }}>
+              <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(99,102,241,0.15)' }}>
                 <Play className="w-3 h-3 text-brand-indigo fill-brand-indigo" />
               </div>
               Watch Demo
@@ -358,6 +362,13 @@ function Hero() {
                     <p className="text-[9px] text-text-muted mt-0.5">{m.label}</p>
                   </div>
                 ))}
+              </div>
+
+              {/* Sample interview label */}
+              <div className="mt-3 flex items-center justify-center">
+                <span className="text-[10px] font-medium text-text-muted px-2.5 py-0.5 rounded-full bg-surface-border/50 border border-surface-border">
+                  Sample interview
+                </span>
               </div>
             </div>
 
