@@ -6,7 +6,7 @@ import {
   Play, FileText, LogOut, ChevronRight, Target,
   Plus, Calendar, Upload, Sparkles, Loader2, ArrowRight,
   Bell, Star, Rocket, Gem, GraduationCap, Award, Lock,
-  CheckCircle2, Dumbbell, Zap
+  CheckCircle2, Dumbbell, Zap, RefreshCw, AlertCircle
 } from 'lucide-react'
 import axios from 'axios'
 import { collection, query, where, getDocs } from 'firebase/firestore'
@@ -450,6 +450,7 @@ export function NewInterviewModal({ onClose, onStart, initialRole = 'Software En
   const [targetRole, setTargetRole] = useState(initialRole)
   const [resumeDifficulty, setResumeDifficulty] = useState('Medium')
   const [analyzingResume, setAnalyzingResume] = useState(false)
+  const [isServerWaking, setIsServerWaking] = useState(false)
   const [resumeError, setResumeError] = useState('')
 
   const handleResumeFileChange = (e) => {
@@ -463,6 +464,10 @@ export function NewInterviewModal({ onClose, onStart, initialRole = 'Software En
   const handleStartResumeInterview = async () => {
     setAnalyzingResume(true)
     setResumeError('')
+
+    const wakeTimer = setTimeout(() => {
+      setIsServerWaking(true)
+    }, 3000)
 
     try {
       let questions = []
@@ -495,22 +500,11 @@ export function NewInterviewModal({ onClose, onStart, initialRole = 'Software En
       })
     } catch (err) {
       console.warn('Resume API fallback:', err)
-      // Fallback personalized questions
-      onStart({
-        type: 'Technical',
-        difficulty: resumeDifficulty,
-        domain: `Resume · ${targetRole}`,
-        isResumeBased: true,
-        customQuestions: [
-          { question: `Walk me through your most complex project relevant to ${targetRole}. What technical trade-offs did you make?` },
-          { question: `Describe a difficult bug or production outage you investigated. What was the root cause?` },
-          { question: `How do you approach system reliability and API security when architecting features?` },
-          { question: `Tell me about a time you had to balance clean code architecture with rapid business delivery.` },
-          { question: `What questions do you have about engineering culture and development practices?` },
-        ],
-        timePerQuestion: config.timePerQuestion !== undefined ? config.timePerQuestion : 120,
-      })
+      const errMsg = err?.response?.data?.error || err?.message || 'Server did not respond'
+      setResumeError(`Could not connect to interview server (${errMsg}). Render free tier instances may take up to a minute to wake up on first visit.`)
     } finally {
+      clearTimeout(wakeTimer)
+      setIsServerWaking(false)
       setAnalyzingResume(false)
     }
   }
@@ -724,7 +718,33 @@ export function NewInterviewModal({ onClose, onStart, initialRole = 'Software En
             </div>
 
             {resumeError && (
-              <p className="text-xs text-red-400">{resumeError}</p>
+              <div className="p-3.5 rounded-xl bg-red-500/10 border border-red-500/25 text-left">
+                <div className="flex items-start gap-2.5">
+                  <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="text-xs text-red-300 font-semibold">Resume Connection Issue</p>
+                    <p className="text-[11px] text-red-200/80 mt-0.5 leading-relaxed">{resumeError}</p>
+                    <div className="flex items-center gap-2 mt-2.5">
+                      <button
+                        type="button"
+                        onClick={handleStartResumeInterview}
+                        disabled={analyzingResume}
+                        className="px-3 py-1.5 rounded-lg bg-red-500 hover:bg-red-600 text-white text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer disabled:opacity-50"
+                      >
+                        <RefreshCw className={`w-3 h-3 ${analyzingResume ? 'animate-spin' : ''}`} />
+                        Retry Extraction
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('standard')}
+                        className="px-2.5 py-1.5 rounded-lg bg-white/10 hover:bg-white/15 text-text-primary text-[11px] font-medium transition-all cursor-pointer"
+                      >
+                        Use Standard Topics
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
             )}
 
             <div className="flex gap-3 pt-3">
@@ -735,10 +755,17 @@ export function NewInterviewModal({ onClose, onStart, initialRole = 'Software En
                 id="btn-start-resume-interview"
                 onClick={handleStartResumeInterview}
                 disabled={analyzingResume}
-                className="btn-primary flex-1 justify-center py-2.5 text-xs"
+                className="btn-primary flex-1 justify-center py-2.5 text-xs font-bold"
               >
                 {analyzingResume ? (
-                  <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Analyzing Resume…</>
+                  <span className="flex items-center gap-1.5 text-center">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin flex-shrink-0" />
+                    <span>
+                      {isServerWaking
+                        ? 'Waking up the interview server... this can take up to a minute on first visit'
+                        : 'Analyzing Resume…'}
+                    </span>
+                  </span>
                 ) : (
                   <><Sparkles className="w-3.5 h-3.5" /> Start Tailored Session</>
                 )}

@@ -269,7 +269,7 @@ def create_app():
 
     # CORS — allow requests from Vite dev server and Vercel
     CORS(app, resources={
-        r"/api/*": {
+        r"/*": {
             "origins": [
                 "http://localhost:3000",
                 "http://localhost:3001",
@@ -289,9 +289,10 @@ def create_app():
     # Direct endpoint for resume extraction: POST /api/resume/extract
     app.add_url_rule("/api/resume/extract", view_func=resume_upload, methods=["POST"])
 
+    @app.route("/health", methods=["GET"])
     @app.route("/api/health", methods=["GET"])
     def health():
-        return {"status": "ok", "message": "InterviewSense AI backend is running 🚀"}
+        return jsonify({"status": "ok", "message": "InterviewSense AI backend is running 🚀"}), 200
 
     @app.route("/api/generate-questions", methods=["POST"])
     def generate_questions():
@@ -328,22 +329,48 @@ Rules:
 Example:
 ["Question 1?", "Question 2?", "Question 3?"]"""
 
+                # Retired or deprecated Gemini models to exclude
+                RETIRED_MODELS = {
+                    "gemini-1.5-flash", "gemini-1.5-flash-001", "gemini-1.5-flash-002",
+                    "gemini-1.5-pro", "gemini-1.0-pro", "gemini-3.6-flash"
+                }
+
+                configured_model = os.getenv("GEMINI_MODEL", "gemini-2.0-flash").strip()
+                fallback_str = os.getenv("GEMINI_FALLBACK_MODELS", "gemini-flash-latest").strip()
+                raw_models = [configured_model] + [m.strip() for m in fallback_str.split(",") if m.strip()]
+
+                # Filter out retired models, duplicates, and preserve order with gemini-flash-latest as final fallback
+                candidate_models = []
+                for m in raw_models:
+                    if m and m not in RETIRED_MODELS and m not in candidate_models and m != "gemini-flash-latest":
+                        candidate_models.append(m)
+
+                # Ensure gemini-flash-latest is the final fallback
+                candidate_models.append("gemini-flash-latest")
+
                 response = None
-                for m_name in ["gemini-1.5-flash", "gemini-3.6-flash", "gemini-flash-latest"]:
+                used_model = None
+                for m_name in candidate_models:
                     try:
+                        print(f"[Gemini] Attempting question generation with model: {m_name}")
                         response = genai.GenerativeModel(m_name).generate_content(prompt)
+                        used_model = m_name
+                        print(f"[Gemini] Successfully generated questions using model: {used_model}")
                         break
-                    except Exception:
+                    except Exception as err:
+                        print(f"[Gemini] Model '{m_name}' failed: {err}. Trying next fallback...")
                         continue
-                if not response:
-                    raise RuntimeError("All Gemini models failed")
+
+                if not response or not used_model:
+                    raise RuntimeError(f"All Gemini models failed: {candidate_models}")
+
                 raw = response.text.strip()
                 # Clean up any markdown code fencing
                 cleaned = re.sub(r"^```(?:json)?\s*", "", raw)
                 cleaned = re.sub(r"\s*```$", "", cleaned)
                 questions = json.loads(cleaned)
                 if isinstance(questions, list) and len(questions) > 0:
-                    return jsonify({"questions": questions[:count], "source": "gemini", "count": len(questions[:count])})
+                    return jsonify({"questions": questions[:count], "source": "gemini", "model": used_model, "count": len(questions[:count])})
             except Exception as e:
                 print(f"Gemini question generation error: {e}, falling back to curated catalog")
 

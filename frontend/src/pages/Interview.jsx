@@ -26,6 +26,7 @@ import {
   Upload,
   FileText,
   Trash2,
+  RefreshCw,
 } from 'lucide-react'
 import axios from 'axios'
 import { useAuth } from '../context/AuthContext'
@@ -257,7 +258,9 @@ export default function Interview() {
   const [timePerQuestion, setTimePerQuestion] = useState(120) // in seconds: 0 | 60 | 120 | 180. Default: 2 minutes (120)
   const [timeLeft, setTimeLeft] = useState(120) // countdown in seconds
   const [loadingQuestions, setLoadingQuestions] = useState(false)
+  const [isServerWaking, setIsServerWaking] = useState(false)
   const [setupError, setSetupError] = useState('')
+  const [apiError, setApiError] = useState(null)
 
   // Resume-based states
   const [resumeFile, setResumeFile] = useState(null)
@@ -473,6 +476,11 @@ export default function Interview() {
   const handleStartInterview = async (overrideParams) => {
     setLoadingQuestions(true)
     setSetupError('')
+    setApiError(null)
+
+    const wakeTimer = setTimeout(() => {
+      setIsServerWaking(true)
+    }, 3000)
 
     const useType = overrideParams?.type || interviewType
     const useDomain = overrideParams?.domain || selectedDomain
@@ -518,10 +526,16 @@ export default function Interview() {
         }
       } catch (err) {
         console.error('Resume question generation error:', err)
-        setSetupError(
-          'Failed to extract resume with AI. Please check your PDF or click "Remove" to continue with standard domain questions.'
-        )
+        const errMsg = err?.response?.data?.error || err?.message || 'Server did not respond.'
+        setApiError({
+          title: 'Resume Extraction & Question Generation Failed',
+          message: `Could not generate questions from your resume: ${errMsg}. If Render's server was sleeping, retrying now usually succeeds immediately.`,
+          retryAction: () => handleStartInterview(overrideParams),
+          allowCuratedFallback: true,
+        })
       } finally {
+        clearTimeout(wakeTimer)
+        setIsServerWaking(false)
         setLoadingQuestions(false)
       }
       return
@@ -559,28 +573,40 @@ export default function Interview() {
         throw new Error('No questions returned from backend.')
       }
     } catch (err) {
-      console.warn('Backend question fetch failed, using curated default questions:', err)
-      // Fallback questions for smooth client experience
-      const defaultQuestions = [
-        `Explain the core architecture and fundamental principles of ${useDomain}.`,
-        `What are the most common performance bottlenecks in ${useDomain} and how do you mitigate them?`,
-        `Walk me through a real-world scenario where you had to solve a complex ${useDomain} challenge.`,
-        `What are the critical trade-offs between speed, scalability, and memory consumption in ${useDomain}?`,
-        `Describe the industry best practices for testing, monitoring, and debugging in ${useDomain}.`,
-      ].slice(0, useCount)
-
-      setQuestions(defaultQuestions)
-      setIsResumeActive(false)
-      setCurrentIndex(0)
-      setAnswers([])
-      setTimerSeconds(0)
-      setTimeLeft(useTime)
-      setQuestionStartTime(Date.now())
-      resetTranscript('')
-      setStage('interview')
+      console.warn('Backend question fetch failed:', err)
+      const errMsg = err?.response?.data?.error || err?.message || 'Server did not respond.'
+      setApiError({
+        title: 'Interview Server Connection Issue',
+        message: `Failed to connect to AI server: ${errMsg}. Render instances can take up to a minute on first wake-up. You can retry or proceed immediately with curated questions.`,
+        retryAction: () => handleStartInterview(overrideParams),
+        allowCuratedFallback: true,
+      })
     } finally {
+      clearTimeout(wakeTimer)
+      setIsServerWaking(false)
       setLoadingQuestions(false)
     }
+  }
+
+  const handleProceedWithCuratedFallback = () => {
+    const defaultQuestions = [
+      `Explain the core architecture and fundamental principles of ${selectedDomain}.`,
+      `What are the most common performance bottlenecks in ${selectedDomain} and how do you mitigate them?`,
+      `Walk me through a real-world scenario where you had to solve a complex ${selectedDomain} challenge.`,
+      `What are the critical trade-offs between speed, scalability, and memory consumption in ${selectedDomain}?`,
+      `Describe the industry best practices for testing, monitoring, and debugging in ${selectedDomain}.`,
+    ].slice(0, questionCount)
+
+    setQuestions(defaultQuestions)
+    setIsResumeActive(false)
+    setCurrentIndex(0)
+    setAnswers([])
+    setTimerSeconds(0)
+    setTimeLeft(timePerQuestion)
+    setQuestionStartTime(Date.now())
+    resetTranscript('')
+    setApiError(null)
+    setStage('interview')
   }
 
   // Toggle microphone
@@ -710,6 +736,46 @@ export default function Interview() {
               Choose your domain, interview style, and difficulty. Our Gemini AI will generate tailored questions for your mock session.
             </p>
           </motion.div>
+
+          {apiError && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mb-6 p-5 rounded-2xl bg-red-500/10 border border-red-500/25 text-left"
+            >
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 rounded-lg bg-red-500/20 text-red-400 flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <AlertCircle className="w-4 h-4" />
+                </div>
+                <div className="flex-1">
+                  <h4 className="text-sm font-bold text-red-300">{apiError.title}</h4>
+                  <p className="text-xs text-red-200/80 mt-1 leading-relaxed">{apiError.message}</p>
+                  
+                  <div className="flex flex-wrap items-center gap-3 mt-4">
+                    <button
+                      type="button"
+                      onClick={apiError.retryAction}
+                      disabled={loadingQuestions}
+                      className="px-4 py-2 rounded-xl bg-red-500 text-white text-xs font-bold hover:bg-red-600 transition-all flex items-center gap-1.5 shadow-md shadow-red-500/20 cursor-pointer disabled:opacity-50"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${loadingQuestions ? 'animate-spin' : ''}`} />
+                      Retry Request
+                    </button>
+
+                    {apiError.allowCuratedFallback && (
+                      <button
+                        type="button"
+                        onClick={handleProceedWithCuratedFallback}
+                        className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-text-primary text-xs font-semibold transition-all cursor-pointer"
+                      >
+                        Continue with Curated Questions
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
 
           {setupError && (
             <div className="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-center gap-2">
@@ -1042,8 +1108,14 @@ export default function Interview() {
               >
                 {loadingQuestions ? (
                   <div className="flex items-center gap-2.5">
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    <span>{resumeFile ? 'Analyzing Resume & Generating Questions...' : 'Generating Questions with Gemini AI...'}</span>
+                    <Loader2 className="w-5 h-5 animate-spin flex-shrink-0" />
+                    <span>
+                      {isServerWaking
+                        ? 'Waking up the interview server... this can take up to a minute on first visit'
+                        : resumeFile
+                        ? 'Analyzing Resume & Generating Questions...'
+                        : 'Generating Questions with Gemini AI...'}
+                    </span>
                   </div>
                 ) : (
                   <div className="flex items-center gap-2">

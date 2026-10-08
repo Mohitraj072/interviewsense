@@ -856,8 +856,26 @@ function Footer() {
   )
 }
 
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000'
+
 // ─── Main Landing Page ────────────────────────────────────────────────────────
 export default function Landing() {
+  useEffect(() => {
+    // Silently ping /health so Render's free-tier instance wakes up early before user starts an interview
+    const pingHealth = async () => {
+      try {
+        await fetch(`${API_BASE}/health`, { method: 'GET', mode: 'cors' })
+      } catch {
+        try {
+          await fetch(`${API_BASE}/api/health`, { method: 'GET', mode: 'cors' })
+        } catch {
+          // Silently ignore ping errors on landing page
+        }
+      }
+    }
+    pingHealth()
+  }, [])
+
   return (
     <div className="bg-bg-primary min-h-screen">
       <Navbar />

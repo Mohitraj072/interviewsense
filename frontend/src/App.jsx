@@ -1,7 +1,10 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
 import { ThemeProvider } from './context/ThemeContext'
+import { ApiStatusProvider } from './context/ApiStatusContext'
 import ProtectedRoute from './components/ProtectedRoute'
+import ErrorBoundary from './components/ErrorBoundary'
+import ServerWakeIndicator from './components/ServerWakeIndicator'
 import Landing from './pages/Landing'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
@@ -12,14 +15,17 @@ import Progress from './pages/Progress'
 
 function App() {
   return (
-    <ThemeProvider>
-      <AuthProvider>
-        <Router>
-          <div
-            className="min-h-screen bg-bg-primary text-text-primary transition-colors duration-200"
-            style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}
-          >
-          <Routes>
+    <ErrorBoundary>
+      <ThemeProvider>
+        <AuthProvider>
+          <ApiStatusProvider>
+            <Router>
+              <div
+                className="min-h-screen bg-bg-primary text-text-primary transition-colors duration-200"
+                style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}
+              >
+                <ServerWakeIndicator />
+                <Routes>
             {/* Public */}
             <Route path="/" element={<Landing />} />
             <Route path="/login" element={<Login />} />
@@ -47,8 +53,10 @@ function App() {
           </Routes>
         </div>
       </Router>
-    </AuthProvider>
-  </ThemeProvider>
+    </ApiStatusProvider>
+  </AuthProvider>
+</ThemeProvider>
+</ErrorBoundary>
   )
 }
 

@@ -17,17 +17,37 @@ report_bp = Blueprint("report", __name__)
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
 def generate_content_with_fallback(prompt):
-    models = ["gemini-1.5-flash", "gemini-3.6-flash", "gemini-flash-latest"]
+    RETIRED_MODELS = {
+        "gemini-1.5-flash", "gemini-1.5-flash-001", "gemini-1.5-flash-002",
+        "gemini-1.5-pro", "gemini-1.0-pro", "gemini-3.6-flash"
+    }
+
+    configured_model = os.getenv("GEMINI_MODEL", "gemini-2.0-flash").strip()
+    fallback_str = os.getenv("GEMINI_FALLBACK_MODELS", "gemini-flash-latest").strip()
+    raw_models = [configured_model] + [m.strip() for m in fallback_str.split(",") if m.strip()]
+
+    candidate_models = []
+    for m in raw_models:
+        if m and m not in RETIRED_MODELS and m not in candidate_models and m != "gemini-flash-latest":
+            candidate_models.append(m)
+
+    candidate_models.append("gemini-flash-latest")
+
+    if not candidate_models:
+        raise RuntimeError("No valid Gemini models configured or available")
+
     last_err = None
-    for m in models:
+    for m in candidate_models:
         try:
-            return genai.GenerativeModel(m).generate_content(prompt)
+            print(f"[Gemini] Attempting report content generation with model: {m}")
+            res = genai.GenerativeModel(m).generate_content(prompt)
+            print(f"[Gemini] Successfully generated report content using model: {m}")
+            return res
         except Exception as e:
+            print(f"[Gemini] Model '{m}' failed: {e}. Trying next fallback...")
             last_err = e
             continue
-    raise last_err
-
-model = genai.GenerativeModel("gemini-1.5-flash")
+    raise last_err or RuntimeError("All Gemini models failed")
 
 
 import json

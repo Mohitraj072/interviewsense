@@ -5,7 +5,7 @@ import {
   ArrowLeft, RotateCcw, Printer, Share2,
   CheckCircle2, AlertTriangle, Sparkles, Target,
   MessageSquare, BookOpen, ChevronDown, ChevronUp, BarChart3,
-  ShieldCheck
+  ShieldCheck, RefreshCw, Loader2,
 } from 'lucide-react'
 import { doc, getDoc, collection, addDoc, serverTimestamp } from 'firebase/firestore'
 import { auth, db } from '../firebase'
@@ -211,11 +211,18 @@ export default function Report() {
   const [sessionMeta, setSessionMeta] = useState(null)
   const [expandedQuestion, setExpandedQuestion] = useState(0)
   const [copiedLink, setCopiedLink] = useState(false)
+  const [isServerWaking, setIsServerWaking] = useState(false)
+  const [reportError, setReportError] = useState(null)
 
-  useEffect(() => {
-    const fetchOrCreateReport = async () => {
-      setLoading(true)
+  const fetchOrCreateReport = async () => {
+    setLoading(true)
+    setReportError(null)
 
+    const wakeTimer = setTimeout(() => {
+      setIsServerWaking(true)
+    }, 3000)
+
+    try {
       const stateData = location.state
 
       // 1. If passed from Interview completion
@@ -530,8 +537,20 @@ export default function Report() {
       })
 
       setLoading(false)
+    } catch (err) {
+      console.error('Error in fetchOrCreateReport:', err)
+      setReportError({
+        title: 'Unable to Generate or Retrieve Report',
+        message: err?.response?.data?.error || err?.message || 'The server took too long to respond or is still starting up. Please try again.',
+      })
+      setLoading(false)
+    } finally {
+      clearTimeout(wakeTimer)
+      setIsServerWaking(false)
     }
+  }
 
+  useEffect(() => {
     fetchOrCreateReport()
   }, [id, location.state, user])
 
@@ -547,13 +566,69 @@ export default function Report() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-bg-primary flex items-center justify-center">
-        <div className="glass-card p-10 flex flex-col items-center gap-4 text-center max-w-sm">
-          <div className="w-12 h-12 rounded-2xl bg-brand-gradient flex items-center justify-center animate-pulse">
-            <BarChart3 className="w-6 h-6 text-white" />
+      <div className="min-h-screen bg-bg-primary flex items-center justify-center p-6">
+        <div className="glass-card p-10 flex flex-col items-center gap-4 text-center max-w-md w-full border border-surface-border">
+          <div className="relative">
+            <div className="w-14 h-14 rounded-2xl bg-brand-gradient flex items-center justify-center shadow-lg shadow-indigo-500/25">
+              <BarChart3 className="w-7 h-7 text-white" />
+            </div>
+            <div className="absolute -inset-1.5 rounded-2xl border-2 border-indigo-500/40 border-t-indigo-400 animate-spin" />
           </div>
-          <h2 className="text-lg font-bold text-text-primary">Generating Performance Report</h2>
-          <p className="text-xs text-text-secondary">Synthesizing Gemini AI evaluations, radar metrics, and filler word counter…</p>
+
+          <h2 className="text-lg font-bold text-text-primary">
+            {isServerWaking
+              ? 'Waking up the interview server... this can take up to a minute on first visit'
+              : 'Generating Performance Report'}
+          </h2>
+
+          <p className="text-xs text-text-secondary leading-relaxed">
+            {isServerWaking
+              ? "Render free-tier instances sleep when idle. We're warming up the AI engine to evaluate your answers."
+              : 'Synthesizing Gemini AI evaluations, radar metrics, and filler word counter…'}
+          </p>
+
+          {isServerWaking && (
+            <div className="flex items-center gap-2 mt-2 px-3 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-[11px] font-medium text-indigo-300">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              <span>Cold-start in progress... please hold on</span>
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  if (reportError && !reportData) {
+    return (
+      <div className="min-h-screen bg-bg-primary flex items-center justify-center p-6">
+        <div className="glass-card p-8 rounded-2xl max-w-md w-full text-center border border-red-500/25 shadow-2xl">
+          <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-400">
+            <AlertTriangle className="w-7 h-7" />
+          </div>
+          <h2 className="text-xl font-bold text-text-primary mb-2">
+            {reportError.title}
+          </h2>
+          <p className="text-xs text-text-secondary mb-6 leading-relaxed">
+            {reportError.message}
+          </p>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <button
+              type="button"
+              onClick={fetchOrCreateReport}
+              className="btn-primary flex-1 justify-center py-3 text-xs font-bold cursor-pointer"
+            >
+              <RefreshCw className="w-4 h-4 mr-1.5" />
+              Retry Report
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('/dashboard')}
+              className="btn-secondary flex-1 justify-center py-3 text-xs font-semibold cursor-pointer"
+            >
+              <ArrowLeft className="w-4 h-4 mr-1.5" />
+              Dashboard
+            </button>
+          </div>
         </div>
       </div>
     )
