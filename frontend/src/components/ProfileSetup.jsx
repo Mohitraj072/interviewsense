@@ -47,7 +47,7 @@ export default function ProfileSetup({ onComplete }) {
         initial={{ opacity: 0, scale: 0.9, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-        className="glass-card w-full max-w-lg p-8"
+        className="glass-card w-full max-w-lg p-5 sm:p-8"
       >
         {/* Header */}
         <div className="flex items-center gap-3 mb-8">

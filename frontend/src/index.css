@@ -89,6 +89,8 @@ body.light,
     -moz-osx-font-smoothing: grayscale;
     background-color: var(--bg-primary);
     color: var(--text-primary);
+    overflow-x: hidden;
+    max-width: 100%;
   }
 
   body {
@@ -97,6 +99,8 @@ body.light,
     font-family: 'Inter', system-ui, sans-serif;
     min-height: 100vh;
     transition: background-color 0.25s ease, color 0.25s ease;
+    overflow-x: hidden;
+    max-width: 100%;
   }
 
   ::selection {

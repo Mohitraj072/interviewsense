@@ -702,7 +702,7 @@ export default function Interview() {
               Back to Dashboard
             </Link>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 sm:gap-3">
               <ThemeToggle id="theme-toggle-interview-setup" />
               <div className="flex items-center gap-2">
                 <div
@@ -710,7 +710,7 @@ export default function Interview() {
                 >
                   <Brain className="w-3.5 h-3.5 text-white" />
                 </div>
-                <span className="text-xs font-bold tracking-wide text-text-secondary">
+                <span className="text-xs font-bold tracking-wide text-text-secondary hidden sm:inline">
                   INTERVIEW ENGINE <span className="text-[#6366F1]">PHASE 3</span>
                 </span>
               </div>
@@ -975,7 +975,7 @@ export default function Interview() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               {/* Difficulty */}
               <div
-                className="p-6 rounded-2xl"
+                className="p-4 sm:p-6 rounded-2xl"
                 style={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)', boxShadow: 'var(--card-shadow)' }}
               >
                 <label className="block text-xs font-bold text-text-secondary uppercase tracking-wider mb-3">
@@ -1010,7 +1010,7 @@ export default function Interview() {
 
               {/* Number of Questions */}
               <div
-                className="p-6 rounded-2xl"
+                className="p-4 sm:p-6 rounded-2xl"
                 style={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)', boxShadow: 'var(--card-shadow)' }}
               >
                 <label className="block text-xs font-bold text-text-secondary uppercase tracking-wider mb-3">
@@ -1501,12 +1501,12 @@ export default function Interview() {
         </AnimatePresence>
 
         {/* Action Bottom Bar */}
-        <div className="mt-6 flex items-center justify-between gap-4">
+        <div className="mt-6 flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-3">
           <button
             id="btn-skip-question"
             type="button"
             onClick={() => handleAdvance(true)}
-            className="btn-secondary px-5 py-3 text-xs font-semibold cursor-pointer"
+            className="btn-secondary w-full sm:w-auto px-5 py-3 text-xs font-semibold justify-center cursor-pointer"
           >
             <SkipForward className="w-4 h-4" />
             <span>Skip Question</span>
@@ -1516,7 +1516,7 @@ export default function Interview() {
             id="btn-submit-answer"
             type="button"
             onClick={() => handleAdvance(false)}
-            className="btn-primary py-3 px-7 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer"
+            className="btn-primary w-full sm:w-auto py-3 px-6 sm:px-7 rounded-xl text-xs font-bold justify-center transition-all duration-200 cursor-pointer"
           >
             <span>{currentIndex + 1 === questions.length ? 'Finish & Generate Report' : 'Submit Answer'}</span>
             <ArrowRight className="w-4 h-4" />

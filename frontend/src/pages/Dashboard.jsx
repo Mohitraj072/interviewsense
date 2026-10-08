@@ -516,7 +516,7 @@ export function NewInterviewModal({ onClose, onStart, initialRole = 'Software En
         initial={{ opacity: 0, scale: 0.92, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-        className="glass-card w-full max-w-md p-7 relative"
+        className="glass-card w-full max-w-md p-5 sm:p-7 relative max-h-[92vh] overflow-y-auto"
       >
         <div className="flex items-center justify-between mb-4">
           <div>
@@ -579,7 +579,7 @@ export function NewInterviewModal({ onClose, onStart, initialRole = 'Software En
             {/* Domain */}
             <div>
               <label className="block text-xs font-semibold text-text-secondary mb-1.5">Domain</label>
-              <div className="grid grid-cols-4 gap-1.5">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
                 {DOMAINS.map((d) => (
                   <button key={d} onClick={() => setConfig((c) => ({ ...c, domain: d }))}
                     className="py-2 rounded-xl text-[11px] font-semibold transition-all"
@@ -619,7 +619,7 @@ export function NewInterviewModal({ onClose, onStart, initialRole = 'Software En
             {/* Time per Question */}
             <div>
               <label className="block text-xs font-semibold text-text-secondary mb-1.5">Time per Question</label>
-              <div className="grid grid-cols-4 gap-1.5">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
                 {[
                   { label: 'No Limit', value: 0 },
                   { label: '1 min', value: 60 },
@@ -1037,7 +1037,7 @@ export default function Dashboard() {
       >
         {/* Top bar */}
         <header
-          className="sticky top-0 z-30 h-16 flex items-center justify-between px-6 border-b transition-colors duration-300"
+          className="sticky top-0 z-30 h-16 flex items-center justify-between px-4 sm:px-6 border-b transition-colors duration-300"
           style={{
             background: 'var(--nav-bg)',
             borderColor: 'var(--surface-border)',
@@ -1051,7 +1051,7 @@ export default function Dashboard() {
             </h1>
             <p className="text-xs text-text-muted">{new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             <ThemeToggle id="theme-toggle-dashboard" />
             <button
               className="w-9 h-9 rounded-xl flex items-center justify-center transition-colors border"
@@ -1066,14 +1066,14 @@ export default function Dashboard() {
             <button
               id="btn-new-interview-header"
               onClick={() => setShowNewInterview(true)}
-              className="btn-primary py-2 px-4 text-sm"
+              className="btn-primary py-2 px-3 sm:px-4 text-xs sm:text-sm"
             >
-              <Plus className="w-4 h-4" /> New Interview
+              <Plus className="w-4 h-4" /> <span className="hidden sm:inline">New Interview</span>
             </button>
           </div>
         </header>
 
-        <div className="p-6 max-w-6xl mx-auto">
+        <div className="p-4 sm:p-6 max-w-6xl mx-auto">
           {/* Streak banner */}
           {(currentStreak > 0 || (profile?.streak ?? 0) > 0) && (
             <motion.div

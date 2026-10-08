@@ -637,17 +637,18 @@ export default function Report() {
   return (
     <div className="min-h-screen bg-bg-primary text-text-primary print:bg-white print:text-black">
       {/* Top Navigation */}
-      <header className="sticky top-0 z-40 h-16 border-b border-surface-border px-6 flex items-center justify-between print:hidden"
+      <header className="sticky top-0 z-40 h-16 border-b border-surface-border px-4 sm:px-6 flex items-center justify-between print:hidden"
         style={{ background: 'var(--nav-bg)', backdropFilter: 'blur(16px)' }}>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           <button
             onClick={() => navigate('/dashboard')}
-            className="btn-secondary py-2 px-3 text-xs"
+            className="btn-secondary py-2 px-2.5 sm:px-3 text-xs"
+            title="Back to Dashboard"
           >
-            <ArrowLeft className="w-4 h-4" /> Dashboard
+            <ArrowLeft className="w-4 h-4" /> <span className="hidden sm:inline">Dashboard</span>
           </button>
-          <div className="h-4 w-px bg-surface-border" />
-          <div className="flex items-center gap-2">
+          <div className="hidden md:block h-4 w-px bg-surface-border" />
+          <div className="hidden md:flex items-center gap-2">
             <span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-surface border border-surface-border text-text-primary">
               {sessionMeta?.config?.domain || 'Technical'}
             </span>
@@ -657,33 +658,33 @@ export default function Report() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2 sm:gap-2.5">
           <ThemeToggle id="theme-toggle-report" />
           <button
             onClick={handleShare}
-            className="btn-secondary py-2 px-3 text-xs"
+            className="btn-secondary py-2 px-2.5 sm:px-3 text-xs"
             title="Copy Report Link"
           >
             <Share2 className="w-3.5 h-3.5" />
-            {copiedLink ? 'Copied!' : 'Share'}
+            <span className="hidden sm:inline">{copiedLink ? 'Copied!' : 'Share'}</span>
           </button>
 
           <button
             onClick={handlePrint}
-            className="btn-secondary py-2 px-3 text-xs"
+            className="btn-secondary py-2 px-2.5 sm:px-3 text-xs"
             title="Print or Save PDF"
           >
             <Printer className="w-3.5 h-3.5" />
-            Export PDF
+            <span className="hidden sm:inline">Export PDF</span>
           </button>
 
           <Link
             to="/interview"
             state={{ config: sessionMeta?.config }}
-            className="btn-primary py-2 px-4 text-xs font-semibold"
+            className="btn-primary py-2 px-3 sm:px-4 text-xs font-semibold"
           >
             <RotateCcw className="w-3.5 h-3.5" />
-            Retake Interview
+            <span>Retake</span>
           </Link>
         </div>
       </header>
@@ -768,7 +769,7 @@ export default function Report() {
               <SkillRadarSVG skills={reportData.skill_radar} />
             </div>
 
-            <div className="grid grid-cols-5 gap-1.5 w-full pt-4 border-t border-surface-border text-center">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 w-full pt-4 border-t border-surface-border text-center">
               {Object.entries(reportData.skill_radar || {}).map(([key, val]) => (
                 <div key={key} className="p-1.5 rounded-lg bg-surface-DEFAULT/50">
                   <p className="text-[10px] text-text-muted truncate capitalize">
@@ -1039,17 +1040,17 @@ export default function Report() {
           >
             <ArrowLeft className="w-4 h-4" /> Back to Dashboard
           </button>
-          <div className="flex items-center gap-3 w-full sm:w-auto">
+          <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
             <button
               onClick={handlePrint}
-              className="btn-secondary flex-1 sm:flex-initial py-3 px-5 text-sm"
+              className="btn-secondary w-full sm:w-auto py-3 px-5 text-sm justify-center"
             >
               <Printer className="w-4 h-4" /> Print / PDF
             </button>
             <Link
               to="/interview"
               state={{ config: sessionMeta?.config }}
-              className="btn-primary flex-1 sm:flex-initial py-3 px-6 text-sm justify-center"
+              className="btn-primary w-full sm:w-auto py-3 px-6 text-sm justify-center"
             >
               <RotateCcw className="w-4 h-4" /> Retake Mock Interview
             </Link>

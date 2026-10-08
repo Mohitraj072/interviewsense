@@ -613,7 +613,7 @@ export default function Progress() {
       >
         {/* Top bar */}
         <header
-          className="sticky top-0 z-30 h-16 flex items-center justify-between px-6 border-b transition-colors duration-300"
+          className="sticky top-0 z-30 h-16 flex items-center justify-between px-4 sm:px-6 border-b transition-colors duration-300"
           style={{
             background: 'var(--nav-bg)',
             borderColor: 'var(--surface-border)',
@@ -621,24 +621,24 @@ export default function Progress() {
           }}
         >
           <div>
-            <h1 className="text-base font-bold text-text-primary flex items-center gap-2">
+            <h1 className="text-sm sm:text-base font-bold text-text-primary flex items-center gap-2">
               <TrendingUp className="w-4 h-4 text-brand-indigo" />
-              Progress & Analytics
+              <span>Progress & Analytics</span>
             </h1>
-            <p className="text-xs text-text-muted">Track your improvement, domain scores, and skill competencies over time</p>
+            <p className="text-xs text-text-muted hidden sm:block">Track your improvement, domain scores, and skill competencies over time</p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             <ThemeToggle id="theme-toggle-progress" />
             <button
               onClick={() => setShowNewInterview(true)}
-              className="btn-primary py-2 px-4 text-sm"
+              className="btn-primary py-2 px-3 sm:px-4 text-xs sm:text-sm"
             >
-              <Plus className="w-4 h-4" /> New Interview
+              <Plus className="w-4 h-4" /> <span className="hidden sm:inline">New Interview</span>
             </button>
           </div>
         </header>
 
-        <div className="p-6 max-w-6xl mx-auto space-y-6">
+        <div className="p-4 sm:p-6 max-w-6xl mx-auto space-y-6">
           {/* Summary Stats Cards */}
           <motion.div
             initial="hidden"

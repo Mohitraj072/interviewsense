@@ -12,6 +12,7 @@ import Dashboard from './pages/Dashboard'
 import Interview from './pages/Interview'
 import Report from './pages/Report'
 import Progress from './pages/Progress'
+import NotFound from './pages/NotFound'
 
 function App() {
   return (
@@ -48,8 +49,8 @@ function App() {
               <ProtectedRoute><Report /></ProtectedRoute>
             } />
 
-            {/* Fallback */}
-            <Route path="*" element={<Navigate to="/" replace />} />
+            {/* 404 Fallback */}
+            <Route path="*" element={<NotFound />} />
           </Routes>
         </div>
       </Router>
