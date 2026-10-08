@@ -32,7 +32,7 @@
 |---|---|
 | Frontend | React 18 + Vite + Tailwind CSS 3 |
 | Backend | Flask (Python) + Gunicorn |
-| AI | Google Gemini 1.5 Flash |
+| AI | Google Gemini |
 | Auth + DB | Firebase Auth + Firestore |
 | Deployment | Vercel (frontend) + Render (backend) |
 

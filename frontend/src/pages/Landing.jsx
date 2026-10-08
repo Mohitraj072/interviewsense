@@ -193,7 +193,7 @@ function Hero() {
             }}
           >
             <Sparkles className="w-3 h-3" />
-            Powered by Gemini 1.5 Pro
+            Powered by Google Gemini
             <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
           </motion.div>
 
@@ -450,9 +450,9 @@ const features = [
   {
     icon: Brain,
     title: 'Gemini AI Evaluation',
-    description: 'Each answer is scored on accuracy, depth, clarity, and relevance using Gemini 1.5 Pro — just like a real interviewer.',
+    description: 'Each answer is scored on accuracy, depth, clarity, and relevance using Google Gemini — just like a real interviewer.',
     color: '#8B5CF6',
-    tag: 'Gemini 1.5 Pro',
+    tag: 'Google Gemini',
   },
   {
     icon: FileText,
@@ -848,7 +848,7 @@ function Footer() {
           <div className="flex items-center gap-1.5 text-text-muted text-xs">
             <span>Built with</span>
             <Globe className="w-3.5 h-3.5 text-brand-indigo" />
-            <span>React · Flask · Gemini 1.5 Pro · Firebase</span>
+            <span>React · Flask · Google Gemini · Firebase</span>
           </div>
         </div>
       </div>
