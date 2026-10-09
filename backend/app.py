@@ -267,15 +267,22 @@ FALLBACK_QUESTIONS = {
 def create_app():
     app = Flask(__name__)
 
-    # CORS — allow requests from Vite dev server and Vercel
+    # CORS — allow requests from Vite dev server and Vercel (supports comma-separated origins in FRONTEND_URL)
+    frontend_url_env = os.getenv("FRONTEND_URL")
+    if frontend_url_env:
+        extra_origins = [o.strip() for o in frontend_url_env.split(",") if o.strip()]
+    else:
+        extra_origins = ["*"]
+
+    allowed_origins = [
+        "http://localhost:3000",
+        "http://localhost:3001",
+        "http://localhost:5173",
+    ] + (extra_origins if extra_origins else ["*"])
+
     CORS(app, resources={
         r"/*": {
-            "origins": [
-                "http://localhost:3000",
-                "http://localhost:3001",
-                "http://localhost:5173",
-                os.getenv("FRONTEND_URL", "*"),
-            ]
+            "origins": allowed_origins
         }
     })
 

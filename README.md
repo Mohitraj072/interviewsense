@@ -2,14 +2,14 @@
 
 > AI-powered mock interview platform with voice input, Gemini-powered evaluation, and detailed performance analytics.
 
-[![Live Demo](https://img.shields.io/badge/Live%20Demo-Visit%20Site-blue?style=for-the-badge)](https://interviewsense-ai-tau.vercel.app)
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-Visit%20Site-blue?style=for-the-badge)](https://interviewsense-app.vercel.app)
 [![GitHub](https://img.shields.io/badge/GitHub-Repository-black?style=for-the-badge&logo=github)](https://github.com/Mohitraj072/interviewsense-ai)
 
 ---
 
 ## 🚀 Live Demo
 
-**Frontend:** https://interviewsense-ai-tau.vercel.app  
+**Frontend:** https://interviewsense-app.vercel.app  
 **Backend API:** https://interviewsense-ai-0zeq.onrender.com/api/health
 
 ---
