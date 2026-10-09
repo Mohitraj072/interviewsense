@@ -81,6 +81,9 @@ def start_interview():
             return jsonify({"error": f"Missing field: {field}"}), 400
 
     try:
+        raw_jd = data.get("jobDescription") or data.get("job_description") or ""
+        job_description = str(raw_jd).strip()[:4000] if raw_jd else ""
+
         prompt = build_question_prompt(
             interview_type=data["type"],
             difficulty=data["difficulty"],
@@ -90,6 +93,7 @@ def start_interview():
             question_number=1,
             total_questions=10,
             previous_questions=[],
+            job_description=job_description,
         )
 
         response = generate_content_with_fallback(prompt)
@@ -102,6 +106,7 @@ def start_interview():
             "question": question_text,
             "domain": data["domain"],
             "difficulty": data["difficulty"],
+            "hasJobDescription": bool(job_description),
         })
 
     except Exception as e:

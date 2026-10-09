@@ -5,7 +5,7 @@ import {
   ArrowLeft, RotateCcw, Printer, Share2,
   CheckCircle2, AlertTriangle, Sparkles, Target,
   MessageSquare, BookOpen, ChevronDown, ChevronUp, BarChart3,
-  ShieldCheck, RefreshCw, Loader2,
+  ShieldCheck, RefreshCw, Loader2, Briefcase,
 } from 'lucide-react'
 import { doc, getDoc, collection, addDoc, serverTimestamp } from 'firebase/firestore'
 import { auth, db } from '../firebase'
@@ -372,7 +372,7 @@ export default function Report() {
         if (!hasSavedRef.current && targetUser) {
           hasSavedRef.current = true
           try {
-            await addDoc(collection(db, 'reports'), {
+            const reportDoc = {
               userId: targetUser.uid,
               userName: targetUser.displayName || targetUser.email?.split('@')[0] || 'Candidate',
               domain: config?.domain || 'General',
@@ -394,7 +394,12 @@ export default function Report() {
               improvements: completedReport.top_improvements,
               studyPlan: completedReport.studyPlan,
               createdAt: serverTimestamp(),
-            })
+            }
+            if (config?.hasJobDescription || config?.jobTitle) {
+              reportDoc.hasJobDescription = true
+              reportDoc.jobTitle = (config?.jobTitle || '').slice(0, 60)
+            }
+            await addDoc(collection(db, 'reports'), reportDoc)
             console.log('Report saved to Firestore reports collection')
           } catch (fsErr) {
             console.error('Error saving report to Firestore:', fsErr)
@@ -460,7 +465,13 @@ export default function Report() {
             })
 
             setSessionMeta({
-              config: { domain: data.domain, difficulty: data.difficulty, type: data.type },
+              config: {
+                domain: data.domain,
+                difficulty: data.difficulty,
+                type: data.type,
+                hasJobDescription: Boolean(data.hasJobDescription),
+                jobTitle: data.jobTitle || '',
+              },
               fillerCount: data.fillerWordCount || 0,
               sessionId: data.sessionId || id,
               qaHistory: questionsList,
@@ -655,6 +666,15 @@ export default function Report() {
             <span className="text-xs text-text-muted">
               {sessionMeta?.config?.difficulty || 'Medium'} difficulty
             </span>
+            {(sessionMeta?.config?.jobTitle || reportData?.jobTitle) && (
+              <span
+                className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-indigo-500/10 border border-indigo-500/25 text-indigo-400 flex items-center gap-1.5 max-w-[200px] truncate"
+                title={sessionMeta?.config?.jobTitle || reportData?.jobTitle}
+              >
+                <Briefcase className="w-3.5 h-3.5 flex-shrink-0" />
+                <span className="truncate">{sessionMeta?.config?.jobTitle || reportData?.jobTitle}</span>
+              </span>
+            )}
           </div>
         </div>
 
@@ -715,6 +735,12 @@ export default function Report() {
                 {reportData.summary}
               </p>
               <div className="flex flex-wrap items-center justify-center lg:justify-start gap-4 pt-2 text-xs text-text-muted">
+                {(sessionMeta?.config?.jobTitle || reportData?.jobTitle) && (
+                  <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 font-semibold">
+                    <Briefcase className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0" />
+                    <span>Role: <strong className="text-text-primary">{sessionMeta?.config?.jobTitle || reportData?.jobTitle}</strong></span>
+                  </span>
+                )}
                 <span className="flex items-center gap-1.5">
                   <Target className="w-4 h-4 text-brand-indigo" />
                   {sessionMeta?.qaHistory?.length || 10} Questions Evaluated

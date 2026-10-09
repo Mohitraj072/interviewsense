@@ -27,6 +27,7 @@ import {
   FileText,
   Trash2,
   RefreshCw,
+  Briefcase,
 } from 'lucide-react'
 import axios from 'axios'
 import { useAuth } from '../context/AuthContext'
@@ -262,6 +263,11 @@ export default function Interview() {
   const [setupError, setSetupError] = useState('')
   const [apiError, setApiError] = useState(null)
 
+  // Job Description states
+  const [jobDescription, setJobDescription] = useState('')
+  const [jobTitle, setJobTitle] = useState('')
+  const [hasJobDescription, setHasJobDescription] = useState(false)
+
   // Resume-based states
   const [resumeFile, setResumeFile] = useState(null)
   const [isResumeActive, setIsResumeActive] = useState(false)
@@ -295,6 +301,13 @@ export default function Interview() {
         if (incomingState.domain) setSelectedDomain(incomingState.domain)
         if (incomingState.difficulty) setDifficulty(incomingState.difficulty)
         if (incomingState.isResumeBased) setIsResumeActive(true)
+        if (incomingState.jobDescription) {
+          setJobDescription(incomingState.jobDescription.slice(0, 4000))
+          setHasJobDescription(true)
+        }
+        if (incomingState.jobTitle) {
+          setJobTitle(incomingState.jobTitle.slice(0, 60))
+        }
         const incomingTime = incomingState.timePerQuestion !== undefined ? incomingState.timePerQuestion : incomingState.timeLimit
         if (incomingTime !== undefined) {
           setTimePerQuestion(incomingTime)
@@ -306,6 +319,7 @@ export default function Interview() {
             domain: incomingState.domain || 'DSA',
             difficulty: incomingState.difficulty || 'Medium',
             timePerQuestion: incomingTime !== undefined ? incomingTime : 120,
+            jobDescription: incomingState.jobDescription || '',
           })
         }
       }
@@ -543,12 +557,14 @@ export default function Interview() {
 
     // Scenario 2: Normal flow when no resume is uploaded
     setIsResumeActive(false)
+    const activeJd = (overrideParams?.jobDescription !== undefined ? overrideParams.jobDescription : jobDescription)?.trim() || ''
     try {
       const response = await axios.post(`${API_BASE}/api/generate-questions`, {
         type: useType,
         domain: useDomain,
         difficulty: useDifficulty,
         count: useCount,
+        jobDescription: activeJd,
       })
 
       const fetchedList = Array.isArray(response.data)
@@ -562,6 +578,14 @@ export default function Interview() {
       if (cleanList.length > 0) {
         setQuestions(cleanList)
         setIsResumeActive(false)
+        if (response.data?.jobTitle) {
+          setJobTitle(response.data.jobTitle)
+        }
+        if (response.data?.hasJobDescription !== undefined) {
+          setHasJobDescription(Boolean(response.data.hasJobDescription))
+        } else if (activeJd) {
+          setHasJobDescription(true)
+        }
         setCurrentIndex(0)
         setAnswers([])
         setTimerSeconds(0)
@@ -662,6 +686,8 @@ export default function Interview() {
             difficulty,
             count: questions.length,
             isResumeBased: isResumeActive,
+            hasJobDescription: Boolean(jobDescription.trim() || hasJobDescription),
+            jobTitle: (jobTitle || '').slice(0, 60),
           },
           fillerCount: totalFillers,
           sessionId,
@@ -889,6 +915,69 @@ export default function Interview() {
               )}
             </div>
 
+            {/* Tailor to a Job Description (Optional) */}
+            <div
+              className="p-4 sm:p-6 rounded-2xl transition-all duration-200"
+              style={{
+                background: 'var(--card-bg)',
+                border: jobDescription.trim() ? '1.5px solid rgba(99, 102, 241, 0.45)' : '1px solid var(--card-border)',
+                boxShadow: jobDescription.trim() ? '0 0 25px rgba(99, 102, 241, 0.12)' : 'var(--card-shadow)',
+              }}
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                <label
+                  htmlFor="job-description-input"
+                  className="text-xs font-bold text-[#94A3B8] uppercase tracking-wider flex items-center gap-2 cursor-pointer"
+                >
+                  <Briefcase className="w-3.5 h-3.5 text-indigo-400" />
+                  Paste a job description (optional)
+                </label>
+                <div className="flex items-center gap-3">
+                  {jobDescription.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setJobDescription('')
+                        setJobTitle('')
+                        setHasJobDescription(false)
+                      }}
+                      className="text-[11px] text-text-muted hover:text-red-400 transition-colors cursor-pointer"
+                    >
+                      Clear
+                    </button>
+                  )}
+                  <span
+                    className={`text-[11px] font-mono transition-colors ${
+                      jobDescription.length >= 4000
+                        ? 'text-amber-400 font-bold'
+                        : jobDescription.length > 3500
+                        ? 'text-amber-300'
+                        : 'text-text-muted'
+                    }`}
+                  >
+                    {jobDescription.length} / 4000
+                  </span>
+                </div>
+              </div>
+              <p className="text-xs text-[#94A3B8] mb-3">
+                We'll tailor questions to this role.
+              </p>
+              <textarea
+                id="job-description-input"
+                rows={4}
+                maxLength={4000}
+                value={jobDescription}
+                onChange={(e) => setJobDescription(e.target.value.slice(0, 4000))}
+                placeholder="Paste the role requirements, required skills, tools, or responsibilities from the job posting..."
+                className="w-full text-xs font-normal p-3.5 rounded-xl transition-all resize-y min-h-[96px] max-h-[280px] focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                style={{
+                  background: 'rgba(255, 255, 255, 0.03)',
+                  border: '1px solid var(--surface-border)',
+                  color: 'var(--text-primary)',
+                }}
+              />
+            </div>
+
             {/* 1. Interview Type */}
             <div
               className="p-6 rounded-2xl"
@@ -1114,12 +1203,20 @@ export default function Interview() {
                         ? 'Waking up the interview server... this can take up to a minute on first visit'
                         : resumeFile
                         ? 'Analyzing Resume & Generating Questions...'
+                        : jobDescription.trim()
+                        ? 'Tailoring Questions to Job Description...'
                         : 'Generating Questions with Gemini AI...'}
                     </span>
                   </div>
                 ) : (
                   <div className="flex items-center gap-2">
-                    <span>{resumeFile ? 'Start Resume-Based Interview Session' : 'Start Interview Session'}</span>
+                    <span>
+                      {resumeFile
+                        ? 'Start Resume-Based Interview Session'
+                        : jobDescription.trim()
+                        ? 'Start Role-Tailored Interview Session'
+                        : 'Start Interview Session'}
+                    </span>
                     <ArrowRight className="w-5 h-5" />
                   </div>
                 )}
@@ -1127,6 +1224,8 @@ export default function Interview() {
               <p className="text-center text-xs text-[#94A3B8] mt-3">
                 {resumeFile
                   ? 'Gemini AI will personalize questions based on your resume projects, technical skills, and selected domain.'
+                  : jobDescription.trim()
+                  ? "Questions will be tailored to the role's skills, tools, and responsibilities while respecting your chosen difficulty."
                   : 'Microphone audio will be transcribed in real time. You can review and edit your response before submitting.'}
               </p>
             </div>

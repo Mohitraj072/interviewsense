@@ -6,7 +6,7 @@ import {
   Play, FileText, LogOut, ChevronRight, Target,
   Plus, Calendar, Upload, Sparkles, Loader2, ArrowRight,
   Bell, Star, Rocket, Gem, GraduationCap, Award, Lock,
-  CheckCircle2, Dumbbell, Zap, RefreshCw, AlertCircle
+  CheckCircle2, Dumbbell, Zap, RefreshCw, AlertCircle, Briefcase
 } from 'lucide-react'
 import axios from 'axios'
 import { collection, query, where, getDocs } from 'firebase/firestore'
@@ -444,6 +444,7 @@ export function NewInterviewModal({ onClose, onStart, initialRole = 'Software En
     domain: 'DSA',
     timePerQuestion: 120,
   })
+  const [modalJobDescription, setModalJobDescription] = useState('')
   
   // Resume mode states
   const [resumeFile, setResumeFile] = useState(null)
@@ -651,9 +652,38 @@ export function NewInterviewModal({ onClose, onStart, initialRole = 'Software En
               </div>
             </div>
 
+            {/* Paste a job description (optional) */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label htmlFor="modal-jd-input" className="block text-xs font-semibold text-text-secondary flex items-center gap-1.5">
+                  <Briefcase className="w-3.5 h-3.5 text-brand-indigo" />
+                  Paste a job description (optional)
+                </label>
+                <span className={`text-[10px] font-mono ${modalJobDescription.length >= 4000 ? 'text-amber-400 font-bold' : 'text-text-muted'}`}>
+                  {modalJobDescription.length} / 4000
+                </span>
+              </div>
+              <p className="text-[11px] text-text-muted mb-1.5">
+                We'll tailor questions to this role.
+              </p>
+              <textarea
+                id="modal-jd-input"
+                rows={3}
+                maxLength={4000}
+                value={modalJobDescription}
+                onChange={(e) => setModalJobDescription(e.target.value.slice(0, 4000))}
+                placeholder="Paste role requirements, skills, or responsibilities..."
+                className="input-field text-xs py-2 w-full resize-none min-h-[72px]"
+              />
+            </div>
+
             <div className="flex gap-3 pt-3">
               <button onClick={onClose} className="btn-secondary flex-1 justify-center py-2.5 text-xs">Cancel</button>
-              <button id="btn-start-interview" onClick={() => onStart({ ...config, autoStart: true })} className="btn-primary flex-1 justify-center py-2.5 text-xs">
+              <button
+                id="btn-start-interview"
+                onClick={() => onStart({ ...config, jobDescription: modalJobDescription.trim(), autoStart: true })}
+                className="btn-primary flex-1 justify-center py-2.5 text-xs"
+              >
                 <Play className="w-3.5 h-3.5" /> Start Interview
               </button>
             </div>
@@ -1187,6 +1217,21 @@ export default function Dashboard() {
                               {/* Details */}
                               <div>
                                 <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                                  {/* Job Title badge if exists */}
+                                  {item.jobTitle && (
+                                    <span
+                                      className="text-xs font-semibold px-2.5 py-0.5 rounded-lg flex items-center gap-1.5 text-indigo-300 max-w-[160px] sm:max-w-[220px]"
+                                      style={{
+                                        background: 'rgba(99, 102, 241, 0.12)',
+                                        border: '1px solid rgba(99, 102, 241, 0.3)',
+                                      }}
+                                      title={item.jobTitle}
+                                    >
+                                      <Briefcase className="w-3 h-3 text-indigo-400 flex-shrink-0" />
+                                      <span className="truncate">{item.jobTitle}</span>
+                                    </span>
+                                  )}
+
                                   {/* Domain badge */}
                                   <span
                                     className="text-xs font-bold px-2.5 py-0.5 rounded-lg text-[#818CF8]"
