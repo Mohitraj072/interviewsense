@@ -315,16 +315,6 @@ export default function Login() {
               </div>
               <Link to="/" className="text-sm font-bold text-[#F8F8FF]">
                 InterviewSense
-                <span
-                  style={{
-                    background: 'linear-gradient(135deg, #6366F1, #8B5CF6)',
-                    WebkitBackgroundClip: 'text',
-                    WebkitTextFillColor: 'transparent',
-                    backgroundClip: 'text',
-                  }}
-                >
-                  {' '}AI
-                </span>
               </Link>
             </div>
 

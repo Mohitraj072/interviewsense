@@ -537,7 +537,7 @@ export default function Progress() {
             <Brain className="w-4 h-4 text-white" />
           </div>
           <span className="text-sm font-bold" style={{ color: 'var(--sidebar-text)' }}>
-            InterviewSense<span className="gradient-text-brand"> AI</span>
+            InterviewSense
           </span>
         </div>
 

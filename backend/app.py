@@ -292,7 +292,7 @@ def create_app():
     @app.route("/health", methods=["GET"])
     @app.route("/api/health", methods=["GET"])
     def health():
-        return jsonify({"status": "ok", "message": "InterviewSense AI backend is running 🚀"}), 200
+        return jsonify({"status": "ok", "message": "InterviewSense backend is running 🚀"}), 200
 
     @app.route("/api/generate-questions", methods=["POST"])
     def generate_questions():

@@ -32,7 +32,7 @@ export default function NotFound() {
             <Brain className="w-4 h-4 text-white" />
           </div>
           <span className="font-bold text-sm tracking-tight text-text-primary">
-            InterviewSense<span className="gradient-text-brand"> AI</span>
+            InterviewSense
           </span>
         </Link>
         <ThemeToggle id="theme-toggle-404" />
@@ -106,7 +106,7 @@ export default function NotFound() {
 
       {/* Footer */}
       <footer className="relative z-10 py-6 text-center text-xs text-text-muted">
-        © {new Date().getFullYear()} InterviewSense AI. All rights reserved.
+        © {new Date().getFullYear()} InterviewSense. All rights reserved.
       </footer>
     </div>
   )

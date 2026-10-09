@@ -77,7 +77,7 @@ function Navbar() {
             <Brain className="w-4 h-4 text-white" />
           </div>
           <span className="text-base font-bold text-text-primary tracking-tight">
-            InterviewSense<span className="gradient-text-brand"> AI</span>
+            InterviewSense
           </span>
         </div>
 
@@ -638,7 +638,7 @@ function HowItWorks() {
 // ─── Testimonials ─────────────────────────────────────────────────────────────
 const testimonials = [
   {
-    quote: "InterviewSense AI completely transformed my prep. After 2 weeks of daily practice, I nailed my Google interview. The AI feedback was brutally honest and incredibly helpful.",
+    quote: "InterviewSense completely transformed my prep. After 2 weeks of daily practice, I nailed my Google interview. The AI feedback was brutally honest and incredibly helpful.",
     name: "Rahul Sharma",
     role: "SDE-2 @ Google",
     avatar: "RS",
@@ -676,7 +676,7 @@ function Testimonials() {
             <span className="gradient-text-brand">Real offers.</span>
           </h2>
           <p className="text-text-secondary text-lg max-w-xl mx-auto">
-            Join thousands of developers and PMs who used InterviewSense AI to land their dream roles.
+            Join thousands of developers and PMs who used InterviewSense to land their dream roles.
           </p>
         </AnimatedSection>
 
@@ -797,7 +797,7 @@ function Footer() {
                 <Brain className="w-4 h-4 text-white" />
               </div>
               <span className="text-base font-bold text-text-primary">
-                InterviewSense<span className="gradient-text-brand"> AI</span>
+                InterviewSense
               </span>
             </div>
             <p className="text-text-secondary text-sm leading-relaxed max-w-xs mb-5">
@@ -854,7 +854,7 @@ function Footer() {
 
         <div className="border-t border-surface-border pt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-text-muted text-xs">
-            © 2024 InterviewSense AI. All rights reserved.
+            © 2024 InterviewSense. All rights reserved.
           </p>
           <div className="flex items-center gap-1.5 text-text-muted text-xs">
             <span>Built with</span>

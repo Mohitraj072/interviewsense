@@ -1,5 +1,5 @@
 """
-Gemini Prompt Templates for InterviewSense AI
+Gemini Prompt Templates for InterviewSense
 
 All prompts are engineered to produce structured, professional, 
 interview-quality output from Gemini 1.5 Pro.

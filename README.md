@@ -1,4 +1,4 @@
-# InterviewSense AI 🎙️
+# InterviewSense 🎙️
 
 > AI-powered mock interview platform with voice input, Gemini-powered evaluation, and detailed performance analytics.
 
