@@ -2,10 +2,10 @@ import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, useInView, useScroll, useTransform } from 'framer-motion'
 import {
-  Mic, Brain, FileText, BarChart3, Star, Shield, Zap, ArrowRight,
-  ChevronRight, Play, CheckCircle, Users, Trophy, TrendingUp,
-  MessageSquare, Cpu, Target, Github, Twitter, Linkedin,
-  Sparkles, Clock, Award, Globe
+  Mic, Brain, FileText, BarChart3, Shield, Zap, ArrowRight,
+  ChevronRight, Play, CheckCircle, Trophy, TrendingUp,
+  Cpu, Target, Github, Twitter, Linkedin,
+  Sparkles, Clock, Globe
 } from 'lucide-react'
 import ThemeToggle from '../components/ThemeToggle'
 
@@ -42,6 +42,12 @@ function AnimatedSection({ children, className = '', delay = 0 }) {
     </motion.div>
   )
 }
+
+const NAV_LINKS = [
+  { id: 'features', label: 'Features' },
+  { id: 'how-it-works', label: 'How It Works' },
+  { id: 'why-interviewsense', label: 'Why InterviewSense' },
+]
 
 // ─── Navbar ───────────────────────────────────────────────────────────────────
 function Navbar() {
@@ -83,13 +89,13 @@ function Navbar() {
 
         {/* Desktop Nav */}
         <div className="hidden md:flex items-center gap-8">
-          {['features', 'how-it-works', 'testimonials'].map((id) => (
+          {NAV_LINKS.map((link) => (
             <button
-              key={id}
-              onClick={() => scrollTo(id)}
-              className="text-sm text-text-secondary hover:text-text-primary transition-colors capitalize"
+              key={link.id}
+              onClick={() => scrollTo(link.id)}
+              className="text-sm text-text-secondary hover:text-text-primary transition-colors"
             >
-              {id.replace(/-/g, ' ')}
+              {link.label}
             </button>
           ))}
         </div>
@@ -126,9 +132,13 @@ function Navbar() {
           animate={{ opacity: 1, y: 0 }}
           className="md:hidden bg-bg-secondary border-b border-surface-border px-6 py-4 flex flex-col gap-4"
         >
-          {['features', 'how-it-works', 'testimonials'].map((id) => (
-            <button key={id} onClick={() => scrollTo(id)} className="text-text-secondary text-sm text-left capitalize hover:text-text-primary">
-              {id.replace(/-/g, ' ')}
+          {NAV_LINKS.map((link) => (
+            <button
+              key={link.id}
+              onClick={() => scrollTo(link.id)}
+              className="text-text-secondary text-sm text-left hover:text-text-primary"
+            >
+              {link.label}
             </button>
           ))}
           <div className="flex items-center justify-between pt-2 border-t border-surface-border">
@@ -248,33 +258,26 @@ function Hero() {
             </button>
           </motion.div>
 
-          {/* Social proof */}
+          {/* Honest feature highlights */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.7, duration: 0.6 }}
-            className="flex items-center gap-6 mt-10 justify-center lg:justify-start flex-wrap"
+            className="flex items-center gap-2.5 mt-8 justify-center lg:justify-start flex-wrap"
           >
-            <div className="flex -space-x-2">
-              {['#6366F1', '#8B5CF6', '#EC4899', '#F59E0B', '#10B981'].map((color, i) => (
-                <div
-                  key={i}
-                  className="w-8 h-8 rounded-full border-2 border-bg-primary flex items-center justify-center text-xs font-bold text-white"
-                  style={{ background: color }}
-                >
-                  {['R', 'S', 'M', 'A', 'K'][i]}
-                </div>
-              ))}
-            </div>
-            <div>
-              <div className="flex items-center gap-1 mb-0.5">
-                {[...Array(5)].map((_, i) => (
-                  <Star key={i} className="w-3 h-3 fill-yellow-400 text-yellow-400" />
-                ))}
-                <span className="text-text-primary font-semibold text-sm ml-1">4.9</span>
-              </div>
-              <p className="text-text-muted text-xs">Trusted by 12,000+ job seekers</p>
-            </div>
+            {[
+              { label: 'Free to try', icon: Sparkles },
+              { label: 'Voice + text interviews', icon: Mic },
+              { label: 'Built with React, Flask and Gemini', icon: Brain },
+            ].map((pill) => (
+              <span
+                key={pill.label}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium text-text-secondary border border-surface-border bg-surface/60 backdrop-blur-sm"
+              >
+                <pill.icon className="w-3.5 h-3.5 text-brand-indigo flex-shrink-0" />
+                <span>{pill.label}</span>
+              </span>
+            ))}
           </motion.div>
         </div>
 
@@ -378,8 +381,8 @@ function Hero() {
               transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut', delay: 1 }}
               className="absolute -top-3 -right-2 sm:-top-4 sm:-right-4 glass-card px-2.5 sm:px-3 py-1.5 sm:py-2 flex items-center gap-2"
             >
-              <Trophy className="w-3.5 sm:w-4 h-3.5 sm:h-4 text-yellow-400" />
-              <span className="text-[11px] sm:text-xs font-semibold text-text-primary">Top 5%</span>
+              <Sparkles className="w-3.5 sm:w-4 h-3.5 sm:h-4 text-brand-indigo" />
+              <span className="text-[11px] sm:text-xs font-semibold text-text-primary">Instant Feedback</span>
             </motion.div>
 
             {/* Floating badge - bottom left */}
@@ -418,10 +421,10 @@ function Hero() {
 // ─── Stats Bar ────────────────────────────────────────────────────────────────
 function StatsBar() {
   const stats = [
-    { icon: Users, label: 'Active Users', value: '12,000+' },
-    { icon: MessageSquare, label: 'Interviews Done', value: '84,000+' },
-    { icon: TrendingUp, label: 'Avg Score Boost', value: '+34%' },
-    { icon: Award, label: 'Offer Rate', value: '89%' },
+    { icon: Target, label: 'Interview Domains', value: '10+' },
+    { icon: Mic, label: 'Response Modes', value: 'Voice + Text' },
+    { icon: Zap, label: 'Evaluation Speed', value: 'Instant' },
+    { icon: Sparkles, label: 'Practice Access', value: '100% Free' },
   ]
 
   return (
@@ -439,7 +442,7 @@ function StatsBar() {
               <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-1" style={{ background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.2)' }}>
                 <s.icon className="w-5 h-5 text-brand-indigo" />
               </div>
-              <p className="text-3xl font-black gradient-text-brand">{s.value}</p>
+              <p className="text-2xl sm:text-3xl font-black gradient-text-brand">{s.value}</p>
               <p className="text-text-muted text-xs">{s.label}</p>
             </motion.div>
           ))}
@@ -635,48 +638,45 @@ function HowItWorks() {
   )
 }
 
-// ─── Testimonials ─────────────────────────────────────────────────────────────
-const testimonials = [
+// ─── Why InterviewSense ───────────────────────────────────────────────────────
+const whyFeatures = [
   {
-    quote: "InterviewSense completely transformed my prep. After 2 weeks of daily practice, I nailed my Google interview. The AI feedback was brutally honest and incredibly helpful.",
-    name: "Rahul Sharma",
-    role: "SDE-2 @ Google",
-    avatar: "RS",
-    color: "#6366F1",
-    stars: 5,
+    icon: Target,
+    title: 'Tailored to Job Descriptions & Resumes',
+    description: 'Paste any target job description or upload your resume. Gemini extracts required tech stacks and responsibilities to generate realistic role-specific questions.',
+    tag: 'Targeted Questions',
+    color: '#6366F1',
   },
   {
-    quote: "The resume-based questions blew me away. It pulled out the exact projects from my resume and asked deep follow-up questions. Felt like talking to a senior engineer.",
-    name: "Shreya Mehta",
-    role: "Frontend Engineer @ Stripe",
-    avatar: "SM",
-    color: "#8B5CF6",
-    stars: 5,
+    icon: Zap,
+    title: 'Instant Feedback & Scoring',
+    description: 'Get immediate scoring across technical accuracy, depth, and clarity after every answer, along with model answers and actionable improvement guidance.',
+    tag: 'Live Evaluation',
+    color: '#8B5CF6',
   },
   {
-    quote: "I was nervous about voice interviews, but the filler word counter and confidence rating really helped me improve my communication. Landed my dream job in 3 weeks!",
-    name: "Karan Patel",
-    role: "Product Manager @ Atlassian",
-    avatar: "KP",
-    color: "#EC4899",
-    stars: 5,
+    icon: BarChart3,
+    title: 'Progress Tracking Across Sessions',
+    description: 'Track your growth across every mock interview with radar charts, performance category breakdowns, and complete session history on your dashboard.',
+    tag: 'Detailed Analytics',
+    color: '#EC4899',
   },
 ]
 
-function Testimonials() {
+function WhyInterviewSense() {
   return (
-    <section id="testimonials" className="py-28">
+    <section id="why-interviewsense" className="py-28">
       <div className="max-w-6xl mx-auto px-6">
         <AnimatedSection className="text-center mb-16">
           <span className="section-label mb-5 inline-flex">
-            <Star className="w-3 h-3" /> Testimonials
+            <Sparkles className="w-3 h-3" /> Why InterviewSense
           </span>
-          <h2 className="text-4xl sm:text-5xl font-black text-text-primary mb-4 tracking-tight">
-            Real people.{' '}
-            <span className="gradient-text-brand">Real offers.</span>
+          <h2 className="text-3xl sm:text-5xl font-black text-text-primary mb-4 tracking-tight">
+            Real practice for{' '}
+            <span className="gradient-text-brand">real interviews.</span>
           </h2>
-          <p className="text-text-secondary text-lg max-w-xl mx-auto">
-            Join thousands of developers and PMs who used InterviewSense to land their dream roles.
+          <p className="text-text-secondary text-base sm:text-lg max-w-xl mx-auto">
+            Everything in InterviewSense is built around realistic preparation, objective feedback, and measurable improvement.
           </p>
         </AnimatedSection>
 
@@ -687,32 +687,33 @@ function Testimonials() {
           variants={stagger}
           className="grid grid-cols-1 md:grid-cols-3 gap-6"
         >
-          {testimonials.map((t, i) => (
-            <motion.div key={t.name} variants={fadeUp} className="glass-card p-6 flex flex-col gap-5 hover:border-surface-border2 transition-all duration-300">
-              {/* Stars */}
-              <div className="flex gap-1">
-                {[...Array(t.stars)].map((_, i) => (
-                  <Star key={i} className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                ))}
-              </div>
-
-              {/* Quote */}
-              <p className="text-text-secondary text-sm leading-relaxed flex-1">
-                "{t.quote}"
-              </p>
-
-              {/* Author */}
-              <div className="flex items-center gap-3 pt-3 border-t border-surface-border">
-                <div
-                  className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0"
-                  style={{ background: t.color }}
-                >
-                  {t.avatar}
+          {whyFeatures.map((f) => (
+            <motion.div
+              key={f.title}
+              variants={fadeUp}
+              className="glass-card p-6 sm:p-7 flex flex-col justify-between hover:border-surface-border2 transition-all duration-300"
+            >
+              <div>
+                <div className="flex items-center justify-between mb-5">
+                  <div
+                    className="w-11 h-11 rounded-xl flex items-center justify-center"
+                    style={{ background: `${f.color}15`, border: `1px solid ${f.color}30` }}
+                  >
+                    <f.icon className="w-5 h-5" style={{ color: f.color }} />
+                  </div>
+                  <span
+                    className="text-[10px] font-semibold px-2.5 py-1 rounded-full"
+                    style={{ color: f.color, background: `${f.color}15` }}
+                  >
+                    {f.tag}
+                  </span>
                 </div>
-                <div>
-                  <p className="text-sm font-semibold text-text-primary">{t.name}</p>
-                  <p className="text-xs text-text-muted">{t.role}</p>
-                </div>
+                <h3 className="text-lg font-bold text-text-primary mb-2.5 leading-snug">
+                  {f.title}
+                </h3>
+                <p className="text-sm text-text-secondary leading-relaxed">
+                  {f.description}
+                </p>
               </div>
             </motion.div>
           ))}
@@ -825,7 +826,7 @@ function Footer() {
               {[
                 { label: 'Features', action: () => scrollTo('features') },
                 { label: 'How it works', action: () => scrollTo('how-it-works') },
-                { label: 'Testimonials', action: () => scrollTo('testimonials') },
+                { label: 'Why InterviewSense', action: () => scrollTo('why-interviewsense') },
                 { label: 'Dashboard', href: '/dashboard' },
               ].map((item) => (
                 <li key={item.label}>
@@ -894,7 +895,7 @@ export default function Landing() {
       <StatsBar />
       <Features />
       <HowItWorks />
-      <Testimonials />
+      <WhyInterviewSense />
       <CTABanner />
       <Footer />
     </div>

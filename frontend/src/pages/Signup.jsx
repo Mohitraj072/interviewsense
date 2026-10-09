@@ -207,22 +207,22 @@ export default function Signup() {
             Land your dream<br />role with AI
           </h2>
           <p className="text-text-secondary text-sm leading-relaxed mb-8">
-            Join thousands of candidates who improved their interview performance with personalized AI coaching.
+            Practice role-specific interviews with instant AI feedback and track your improvement over time.
           </p>
 
-          {/* Stats */}
+          {/* Feature Highlights */}
           <div className="grid grid-cols-3 gap-3">
             {[
-              { value: '10k+', label: 'Users' },
-              { value: '50k+', label: 'Interviews' },
-              { value: '94%', label: 'Success rate' },
+              { value: '10+', label: 'Domains' },
+              { value: 'Voice+Text', label: 'Response modes' },
+              { value: 'Instant', label: 'Feedback' },
             ].map(({ value, label }) => (
               <div
                 key={label}
                 className="rounded-xl py-3 px-2 text-center bg-surface border border-surface-border"
               >
                 <div
-                  className="text-lg font-black"
+                  className="text-sm font-black truncate"
                   style={{
                     background: 'linear-gradient(135deg, #6366F1, #8B5CF6)',
                     WebkitBackgroundClip: 'text',
