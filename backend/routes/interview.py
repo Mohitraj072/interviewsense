@@ -113,7 +113,7 @@ def start_interview():
         return jsonify({"error": str(e)}), 500
 
 
-def evaluate_answer_helper(question, answer, domain="DSA", difficulty="Medium"):
+def evaluate_answer_helper(question, answer, domain="DSA", difficulty="Medium", wpm=None, filler_count=None):
     """
     Evaluates a candidate answer using Gemini, adhering to scoring tiers:
     - Blank or wrong: 20-40
@@ -136,6 +136,8 @@ def evaluate_answer_helper(question, answer, domain="DSA", difficulty="Medium"):
                 answer=ans_clean if not is_blank else "(No response provided / Skipped)",
                 domain=domain,
                 difficulty=difficulty,
+                wpm=wpm,
+                filler_count=filler_count,
             )
             eval_response = generate_content_with_fallback(eval_prompt)
             raw = eval_response.text.strip()

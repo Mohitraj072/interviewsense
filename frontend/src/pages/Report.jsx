@@ -5,7 +5,7 @@ import {
   ArrowLeft, RotateCcw, Printer, Share2,
   CheckCircle2, AlertTriangle, Sparkles, Target,
   MessageSquare, BookOpen, ChevronDown, ChevronUp, BarChart3,
-  ShieldCheck, RefreshCw, Loader2, Briefcase,
+  ShieldCheck, RefreshCw, Loader2, Briefcase, Mic, Info,
 } from 'lucide-react'
 import { doc, getDoc, collection, addDoc, serverTimestamp } from 'firebase/firestore'
 import { auth, db } from '../firebase'
@@ -198,6 +198,238 @@ function SkillRadarSVG({ skills = {} }) {
   )
 }
 
+// ─── Speaking Analytics Component ───────────────────────────────────────────
+function SpeakingAnalyticsCard({ questions = [] }) {
+  const voiceQuestions = questions.filter(
+    (q) => typeof q.wpm === 'number' && q.wpm > 0 && !q.skipped
+  )
+
+  if (voiceQuestions.length === 0) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.25 }}
+        className="glass-card p-5 sm:p-6 relative overflow-hidden"
+        style={{
+          border: '1px solid var(--surface-border)',
+          background: 'var(--card-bg)',
+        }}
+      >
+        <div className="flex items-start gap-3.5">
+          <div className="w-10 h-10 rounded-xl bg-brand-indigo/10 border border-brand-indigo/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+            <Mic className="w-5 h-5 text-brand-indigo" />
+          </div>
+          <div className="flex-1">
+            <h3 className="text-sm sm:text-base font-bold text-text-primary mb-1">Speaking Analytics</h3>
+            <p className="text-xs text-text-secondary leading-relaxed">
+              Text-only interview: Speaking analytics (words per minute pace and filler word detection) are available when answering via Voice mode.
+            </p>
+          </div>
+        </div>
+      </motion.div>
+    )
+  }
+
+  // Calculate average pace
+  const avgWpm = Math.round(
+    voiceQuestions.reduce((sum, q) => sum + q.wpm, 0) / voiceQuestions.length
+  )
+
+  // Verdict calculation:
+  // under 110 wpm = "a bit slow", 110-160 = "good pace", over 160 = "a bit fast"
+  let paceVerdict = 'good pace'
+  let paceVerdictBadge = 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+  if (avgWpm < 110) {
+    paceVerdict = 'a bit slow'
+    paceVerdictBadge = 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+  } else if (avgWpm > 160) {
+    paceVerdict = 'a bit fast'
+    paceVerdictBadge = 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+  }
+
+  // Total filler words
+  const totalFillers = voiceQuestions.reduce(
+    (sum, q) => sum + (q.fillerCount || 0),
+    0
+  )
+
+  // Aggregate filler breakdown map
+  const aggregateBreakdown = {}
+  voiceQuestions.forEach((q) => {
+    if (q.fillerBreakdown) {
+      Object.entries(q.fillerBreakdown).forEach(([word, count]) => {
+        aggregateBreakdown[word] = (aggregateBreakdown[word] || 0) + count
+      })
+    }
+  })
+
+  // Top 3 fillers with counts
+  const topFillers = Object.entries(aggregateBreakdown)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+
+  // Max WPM for bar chart scaling (minimum ceiling 200)
+  const maxWpm = Math.max(200, ...voiceQuestions.map((q) => q.wpm))
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.25 }}
+      className="glass-card p-5 sm:p-7 relative overflow-hidden"
+      style={{
+        border: '1px solid var(--surface-border)',
+        background: 'var(--card-bg)',
+      }}
+    >
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-brand-indigo/10 border border-brand-indigo/20 flex items-center justify-center flex-shrink-0">
+            <Mic className="w-5 h-5 text-brand-indigo" />
+          </div>
+          <div>
+            <h2 className="text-base font-bold text-text-primary flex items-center gap-2">
+              Speaking Analytics
+              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-brand-indigo/15 text-brand-indigo border border-brand-indigo/25">
+                Voice Delivery
+              </span>
+            </h2>
+            <p className="text-xs text-text-muted mt-0.5">
+              Real-time speech pacing & filler word detection across {voiceQuestions.length} spoken {voiceQuestions.length === 1 ? 'question' : 'questions'}
+            </p>
+          </div>
+        </div>
+
+        {/* Pace Verdict pill */}
+        <div className={`self-start sm:self-auto inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${paceVerdictBadge}`}>
+          <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
+          <span>Verdict: {paceVerdict}</span>
+        </div>
+      </div>
+
+      {/* Top 3 Summary Tiles */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+        {/* Tile 1: Average Pace */}
+        <div className="p-4 rounded-xl bg-surface/60 border border-surface-border flex flex-col justify-between">
+          <span className="text-[11px] font-medium text-text-muted uppercase tracking-wider">Average Pace</span>
+          <div className="flex items-baseline gap-2 mt-2 mb-1">
+            <span className="text-2xl font-black text-text-primary font-mono">{avgWpm}</span>
+            <span className="text-xs text-text-secondary font-medium">WPM</span>
+          </div>
+          <p className="text-[11px] text-text-muted">Target: 110 – 160 WPM</p>
+        </div>
+
+        {/* Tile 2: Filler Words */}
+        <div className="p-4 rounded-xl bg-surface/60 border border-surface-border flex flex-col justify-between">
+          <span className="text-[11px] font-medium text-text-muted uppercase tracking-wider">Total Filler Words</span>
+          <div className="flex items-baseline gap-2 mt-2 mb-1">
+            <span className="text-2xl font-black text-text-primary font-mono">{totalFillers}</span>
+            <span className="text-xs text-text-secondary font-medium">detected</span>
+          </div>
+          <p className="text-[11px] text-text-muted">
+            {totalFillers === 0 ? 'Flawless vocal flow' : `${totalFillers} fillers across answers`}
+          </p>
+        </div>
+
+        {/* Tile 3: Top Fillers */}
+        <div className="p-4 rounded-xl bg-surface/60 border border-surface-border flex flex-col justify-between">
+          <span className="text-[11px] font-medium text-text-muted uppercase tracking-wider">Top Fillers</span>
+          <div className="flex flex-wrap gap-1.5 mt-2 mb-1">
+            {topFillers.length > 0 ? (
+              topFillers.map(([word, count]) => {
+                const isPossible = word === 'like' || word === 'so'
+                return (
+                  <span
+                    key={word}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold bg-surface border border-surface-border text-text-primary"
+                    title={isPossible ? `"${word}" is counted as a possible filler` : `"${word}" is a filler word`}
+                  >
+                    <span>"{word}"</span>
+                    <span className="text-brand-indigo font-mono text-[11px]">×{count}</span>
+                    {isPossible && (
+                      <span className="text-[9px] text-amber-400 font-normal">(possible)</span>
+                    )}
+                  </span>
+                )
+              })
+            ) : (
+              <span className="text-xs text-emerald-400 font-medium">None detected</span>
+            )}
+          </div>
+          <p className="text-[11px] text-text-muted">
+            {topFillers.length > 0 ? 'Top 3 most frequent words' : 'Crisp articulation'}
+          </p>
+        </div>
+      </div>
+
+      {/* Pace Per Question Mini Bar Chart */}
+      <div className="p-4 sm:p-5 rounded-xl bg-surface/40 border border-surface-border mb-4">
+        <div className="flex items-center justify-between mb-3 text-xs flex-wrap gap-2">
+          <span className="font-semibold text-text-primary">Pace Per Question (WPM)</span>
+          <div className="flex items-center gap-3 text-[10px] text-text-muted">
+            <span className="flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-emerald-400" /> 110-160 WPM (Good)
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-amber-400" /> Outside target
+            </span>
+          </div>
+        </div>
+
+        {/* Horizontal bars per question - fully responsive down to 360px */}
+        <div className="space-y-2.5">
+          {voiceQuestions.map((q, idx) => {
+            const w = q.wpm || 0
+            const pct = Math.min(100, Math.round((w / maxWpm) * 100))
+            const isGood = w >= 110 && w <= 160
+            const qNum = q.questionNumber || idx + 1
+
+            return (
+              <div key={idx} className="flex items-center gap-2 sm:gap-2.5 text-xs">
+                <span className="w-6 sm:w-7 font-mono font-bold text-text-muted text-[11px] flex-shrink-0">
+                  Q{qNum}
+                </span>
+                <div className="flex-1 h-5 rounded-md bg-surface border border-surface-border/60 relative overflow-hidden flex items-center">
+                  {/* Optimal zone background indicator (110-160 WPM) */}
+                  <div
+                    className="absolute top-0 bottom-0 bg-emerald-500/5 border-x border-emerald-500/20 pointer-events-none"
+                    style={{
+                      left: `${(110 / maxWpm) * 100}%`,
+                      width: `${((160 - 110) / maxWpm) * 100}%`,
+                    }}
+                  />
+                  {/* Actual WPM bar */}
+                  <motion.div
+                    initial={{ width: 0 }}
+                    animate={{ width: `${pct}%` }}
+                    transition={{ duration: 0.6, delay: idx * 0.08 }}
+                    className={`h-full rounded-sm transition-all ${
+                      isGood
+                        ? 'bg-gradient-to-r from-emerald-500 to-teal-400'
+                        : 'bg-gradient-to-r from-amber-500 to-orange-400'
+                    }`}
+                  />
+                </div>
+                <div className="w-14 sm:w-16 text-right font-mono font-semibold text-text-primary text-[11px] flex-shrink-0">
+                  {w} <span className="text-text-muted font-normal text-[10px]">WPM</span>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Disclaimer */}
+      <div className="flex items-center gap-1.5 text-[11px] text-text-muted pt-1">
+        <Info className="w-3.5 h-3.5 text-text-muted flex-shrink-0" />
+        <span>Filler detection depends on browser speech recognition and may miss some</span>
+      </div>
+    </motion.div>
+  )
+}
+
 // ─── Main Report Page ───────────────────────────────────────────────────────
 export default function Report() {
   const { id } = useParams()
@@ -252,15 +484,28 @@ export default function Report() {
         // Map per-question evaluations
         let finalQuestions = []
         if (finalReport?.per_question && finalReport.per_question.length > 0) {
-          finalQuestions = finalReport.per_question.map((pq, idx) => ({
-            question: pq.question || qaHistory[idx]?.question || `Question ${idx + 1}`,
-            answer: pq.answer || qaHistory[idx]?.answer || '',
-            score: typeof pq.score === 'number' ? pq.score : 70,
-            feedback: pq.feedback || '',
-            ideal_answer: pq.ideal_answer || '',
-            strengths: pq.strengths || [],
-            improvements: pq.improvements || [],
-          }))
+          finalQuestions = finalReport.per_question.map((pq, idx) => {
+            const hist = qaHistory[idx] || {}
+            const item = {
+              question: pq.question || hist.question || `Question ${idx + 1}`,
+              answer: pq.answer || hist.answer || '',
+              score: typeof pq.score === 'number' ? pq.score : 70,
+              feedback: pq.feedback || '',
+              ideal_answer: pq.ideal_answer || '',
+              strengths: pq.strengths || [],
+              improvements: pq.improvements || [],
+            }
+            if (typeof hist.wpm === 'number' || typeof pq.wpm === 'number') {
+              item.wpm = typeof hist.wpm === 'number' ? hist.wpm : pq.wpm
+              item.wordCount = hist.wordCount ?? pq.wordCount ?? 0
+              item.durationSec = hist.durationSec ?? pq.durationSec ?? 0
+              item.fillerCount = hist.fillerCount ?? pq.fillerCount ?? 0
+              item.fillerBreakdown = hist.fillerBreakdown || pq.fillerBreakdown || {}
+              item.definiteFillerCount = hist.definiteFillerCount ?? pq.definiteFillerCount ?? 0
+              item.possibleFillerCount = hist.possibleFillerCount ?? pq.possibleFillerCount ?? 0
+            }
+            return item
+          })
         } else {
           finalQuestions = qaHistory.map((q, idx) => {
             const answerText = (q.answer || '').trim()
@@ -299,7 +544,7 @@ export default function Report() {
               improvements = ['Mention extreme-scale edge cases']
             }
 
-            return {
+            const item = {
               question: q.question || `Question ${idx + 1}`,
               answer: answerText || '(Candidate skipped this question)',
               score: fallbackScore,
@@ -308,6 +553,16 @@ export default function Report() {
               strengths,
               improvements,
             }
+            if (typeof q.wpm === 'number') {
+              item.wpm = q.wpm
+              item.wordCount = q.wordCount ?? 0
+              item.durationSec = q.durationSec ?? 0
+              item.fillerCount = q.fillerCount ?? 0
+              item.fillerBreakdown = q.fillerBreakdown || {}
+              item.definiteFillerCount = q.definiteFillerCount ?? 0
+              item.possibleFillerCount = q.possibleFillerCount ?? 0
+            }
+            return item
           })
         }
 
@@ -380,15 +635,25 @@ export default function Report() {
               type: config?.type || 'Technical',
               totalScore: overallScore,
               verdict: overallVerdict,
-              questions: finalQuestions.map((q) => ({
-                question: q.question,
-                answer: q.answer,
-                score: q.score,
-                feedback: q.feedback || '',
-                ideal_answer: q.ideal_answer || '',
-                strengths: q.strengths || [],
-                improvements: q.improvements || [],
-              })),
+              questions: finalQuestions.map((q) => {
+                const qDoc = {
+                  question: q.question,
+                  answer: q.answer,
+                  score: q.score,
+                  feedback: q.feedback || '',
+                  ideal_answer: q.ideal_answer || '',
+                  strengths: q.strengths || [],
+                  improvements: q.improvements || [],
+                }
+                if (typeof q.wpm === 'number') {
+                  qDoc.wpm = q.wpm
+                  qDoc.wordCount = q.wordCount ?? 0
+                  qDoc.durationSec = q.durationSec ?? 0
+                  qDoc.fillerCount = q.fillerCount ?? 0
+                  qDoc.fillerBreakdown = q.fillerBreakdown || {}
+                }
+                return qDoc
+              }),
               radarScores: completedReport.skill_radar,
               strengths: completedReport.top_strengths,
               improvements: completedReport.top_improvements,
@@ -425,15 +690,25 @@ export default function Report() {
             const avgScore = data.totalScore ?? data.score ?? 75
             const verdict = data.verdict || (avgScore >= 80 ? 'Exceptional' : avgScore >= 65 ? 'Strong' : 'Average')
 
-            const questionsList = (data.questions || data.qaHistory || []).map((q, idx) => ({
-              question: q.question || `Question ${idx + 1}`,
-              answer: q.answer || '',
-              score: typeof q.score === 'number' ? q.score : avgScore,
-              feedback: q.feedback || '',
-              ideal_answer: q.ideal_answer || '',
-              strengths: q.strengths || [],
-              improvements: q.improvements || [],
-            }))
+            const questionsList = (data.questions || data.qaHistory || []).map((q, idx) => {
+              const qObj = {
+                question: q.question || `Question ${idx + 1}`,
+                answer: q.answer || '',
+                score: typeof q.score === 'number' ? q.score : avgScore,
+                feedback: q.feedback || '',
+                ideal_answer: q.ideal_answer || '',
+                strengths: q.strengths || [],
+                improvements: q.improvements || [],
+              }
+              if (typeof q.wpm === 'number') {
+                qObj.wpm = q.wpm
+                qObj.wordCount = q.wordCount ?? 0
+                qObj.durationSec = q.durationSec ?? 0
+                qObj.fillerCount = q.fillerCount ?? 0
+                qObj.fillerBreakdown = q.fillerBreakdown || {}
+              }
+              return qObj
+            })
 
             setReportData({
               overall_score: avgScore,
@@ -847,6 +1122,9 @@ export default function Report() {
             </div>
           </motion.div>
         </div>
+
+        {/* Speaking Analytics Card */}
+        <SpeakingAnalyticsCard questions={reportData.per_question || []} />
 
         {/* Per-Question Breakdown Section */}
         <motion.div

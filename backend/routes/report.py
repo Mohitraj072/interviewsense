@@ -115,10 +115,12 @@ def generate_report():
             a_text = pair.get("answer", "")
             if pair.get("skipped"):
                 a_text = ""
-            eval_result = evaluate_answer_helper(q_text, a_text, domain, difficulty)
+            wpm = pair.get("wpm")
+            filler_count = pair.get("fillerCount")
+            eval_result = evaluate_answer_helper(q_text, a_text, domain, difficulty, wpm=wpm, filler_count=filler_count)
             score = eval_result["score"]
             scores.append(score)
-            per_question.append({
+            q_item = {
                 "question_number": i + 1,
                 "question": q_text,
                 "answer": a_text or "(Candidate skipped this question)",
@@ -127,7 +129,14 @@ def generate_report():
                 "ideal_answer": eval_result["ideal_answer"],
                 "strengths": eval_result["strengths"],
                 "improvements": eval_result["improvements"],
-            })
+            }
+            if wpm is not None:
+                q_item["wpm"] = wpm
+                q_item["wordCount"] = pair.get("wordCount")
+                q_item["durationSec"] = pair.get("durationSec")
+                q_item["fillerCount"] = filler_count
+                q_item["fillerBreakdown"] = pair.get("fillerBreakdown")
+            per_question.append(q_item)
 
         avg_score = round(sum(scores) / max(len(scores), 1)) if scores else 65
         verdict = (

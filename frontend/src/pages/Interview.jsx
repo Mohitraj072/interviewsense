@@ -87,14 +87,60 @@ const DOMAINS = [
   },
 ]
 
-// ── Filler words list ──────────────────────────────────────────────────────────
-const FILLER_WORDS = ['um', 'uh', 'like', 'you know', 'basically', 'actually', 'literally', 'so', 'right', 'sort of']
-const countFillers = (text = '') => {
+// ── Filler words configuration & analytics ──────────────────────────────────
+export const DEFINITE_FILLERS = [
+  'um', 'uh', 'you know', 'basically', 'actually', 'literally', 'sort of', 'kind of', 'i mean'
+]
+export const POSSIBLE_FILLERS = ['like', 'so']
+export const ALL_FILLERS = [...DEFINITE_FILLERS, ...POSSIBLE_FILLERS]
+
+export const countFillers = (text = '') => {
   const lower = text.toLowerCase()
-  return FILLER_WORDS.reduce((acc, word) => {
+  return ALL_FILLERS.reduce((acc, word) => {
     const regex = new RegExp(`\\b${word}\\b`, 'gi')
     return acc + (lower.match(regex) || []).length
   }, 0)
+}
+
+export function computeSpeakingAnalytics(text = '', durationSec = 0) {
+  const clean = (text || '').trim()
+  if (!clean) return null
+
+  const words = clean.split(/\s+/).filter(Boolean)
+  const wordCount = words.length
+  const safeDuration = Math.max(1, Math.round(durationSec))
+  const wpm = Math.round((wordCount / safeDuration) * 60)
+
+  const lower = clean.toLowerCase()
+  const fillerBreakdown = {}
+  let definiteCount = 0
+  let possibleCount = 0
+
+  ALL_FILLERS.forEach((phrase) => {
+    const regex = new RegExp(`\\b${phrase}\\b`, 'gi')
+    const matches = lower.match(regex)
+    const count = matches ? matches.length : 0
+    if (count > 0) {
+      fillerBreakdown[phrase] = count
+      if (POSSIBLE_FILLERS.includes(phrase)) {
+        possibleCount += count
+      } else {
+        definiteCount += count
+      }
+    }
+  })
+
+  const fillerCount = definiteCount + possibleCount
+
+  return {
+    wpm,
+    wordCount,
+    durationSec: safeDuration,
+    fillerCount,
+    definiteFillerCount: definiteCount,
+    possibleFillerCount: possibleCount,
+    fillerBreakdown,
+  }
 }
 
 // ── Web Speech Recognition Hook ───────────────────────────────────────────────
@@ -649,17 +695,32 @@ export default function Interview() {
     const finalAnswer = skipped ? '' : transcript.trim()
     const questionDuration = Math.round((Date.now() - questionStartTime) / 1000)
 
-    const updatedAnswers = [
-      ...answers,
-      {
-        questionIndex: currentIndex,
-        questionText: questions[currentIndex],
-        answer: finalAnswer,
-        skipped,
-        duration: questionDuration,
-      },
-    ]
+    // Compute speaking analytics ONLY for voice-mode answers that are not skipped
+    const analytics =
+      inputMode === 'voice' && !skipped && finalAnswer
+        ? computeSpeakingAnalytics(finalAnswer, questionDuration)
+        : null
 
+    const answerRecord = {
+      questionIndex: currentIndex,
+      questionText: questions[currentIndex],
+      answer: finalAnswer,
+      skipped,
+      duration: questionDuration,
+      inputMode,
+    }
+
+    if (analytics) {
+      answerRecord.wpm = analytics.wpm
+      answerRecord.wordCount = analytics.wordCount
+      answerRecord.durationSec = analytics.durationSec
+      answerRecord.fillerCount = analytics.fillerCount
+      answerRecord.fillerBreakdown = analytics.fillerBreakdown
+      answerRecord.definiteFillerCount = analytics.definiteFillerCount
+      answerRecord.possibleFillerCount = analytics.possibleFillerCount
+    }
+
+    const updatedAnswers = [...answers, answerRecord]
     setAnswers(updatedAnswers)
 
     // Check if last question
@@ -669,13 +730,26 @@ export default function Interview() {
       const totalFillers = countFillers(allText)
       const sessionId = `sess_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
 
-      const qaHistory = updatedAnswers.map((item, idx) => ({
-        question: item.questionText,
-        answer: item.answer || (item.skipped ? '(Candidate skipped this question)' : ''),
-        questionNumber: idx + 1,
-        skipped: item.skipped,
-        duration: item.duration,
-      }))
+      const qaHistory = updatedAnswers.map((item, idx) => {
+        const qaItem = {
+          question: item.questionText,
+          answer: item.answer || (item.skipped ? '(Candidate skipped this question)' : ''),
+          questionNumber: idx + 1,
+          skipped: item.skipped,
+          duration: item.duration,
+          inputMode: item.inputMode,
+        }
+        if (typeof item.wpm === 'number') {
+          qaItem.wpm = item.wpm
+          qaItem.wordCount = item.wordCount
+          qaItem.durationSec = item.durationSec
+          qaItem.fillerCount = item.fillerCount
+          qaItem.fillerBreakdown = item.fillerBreakdown
+          qaItem.definiteFillerCount = item.definiteFillerCount
+          qaItem.possibleFillerCount = item.possibleFillerCount
+        }
+        return qaItem
+      })
 
       navigate('/report', {
         state: {

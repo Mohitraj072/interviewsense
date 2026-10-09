@@ -90,6 +90,8 @@ def build_evaluation_prompt(
     answer: str,
     domain: str,
     difficulty: str,
+    wpm: int = None,
+    filler_count: int = None,
 ) -> str:
     """
     Generate a prompt to evaluate a candidate's interview answer.
@@ -104,6 +106,10 @@ def build_evaluation_prompt(
     if not ans_clean or ans_clean.lower() in ["(candidate skipped this question)", "skipped", "skip"]:
         ans_clean = "(No response provided / Skipped)"
 
+    speaking_block = ""
+    if wpm is not None and filler_count is not None:
+        speaking_block = f"\nCandidate Speaking Delivery: Pace: {wpm} WPM | Filler Words: {filler_count}\n"
+
     return f"""You are an expert, honest technical interviewer evaluating a candidate's answer.
 
 Interview Context:
@@ -115,7 +121,7 @@ Question Asked:
 
 Candidate's Answer:
 "{ans_clean}"
-
+{speaking_block}
 EVALUATION RULES & SCORING TIERS:
 Carefully analyze the candidate's actual words against technical accuracy, depth, and domain expectations.
 - A blank, empty, skipped, or fundamentally wrong answer MUST score 20-40.
@@ -123,6 +129,7 @@ Carefully analyze the candidate's actual words against technical accuracy, depth
 - A good answer that is accurate and covers the primary concepts with minor omissions MUST score 70-85.
 - An excellent, detailed answer with clear structure, trade-offs, and deep technical mastery MUST score 85-100.
 - DO NOT default to 70. Give a differentiated, accurate score reflecting the specific answer.
+- When candidate speaking delivery metrics are provided, briefly address delivery pace and verbal clarity in the feedback.
 
 Respond with a JSON object ONLY (do not include markdown codeblocks or extra text):
 {{
@@ -150,9 +157,14 @@ def build_report_prompt(
         a = pair.get('answer', '')
         if not a or pair.get('skipped'):
             a = "(Candidate skipped or provided no answer)"
+        analytics_line = ""
+        wpm = pair.get('wpm')
+        filler_count = pair.get('fillerCount')
+        if wpm is not None and filler_count is not None:
+            analytics_line = f"\nCandidate Speaking Delivery: Pace: {wpm} WPM | Filler Words: {filler_count}"
         qa_block += f"""
 Question {i}: {q}
-Candidate Answer: {a}
+Candidate Answer: {a}{analytics_line}
 ---"""
 
     return f"""You are a senior hiring committee chair generating a post-interview evaluation report.
@@ -172,6 +184,7 @@ SCORING RULES FOR EACH QUESTION:
 - A good answer addressing main points with minor gaps MUST score 70-85
 - An excellent detailed answer showing mastery MUST score 85-100
 - DO NOT assign the same score to every question. Scores must reflect each specific answer.
+- When candidate speaking metrics (pace in WPM and filler word count) are included for voice answers, factor them into your communication assessment and provide constructive feedback on pacing and verbal clarity.
 
 Generate a JSON report ONLY (no markdown code blocks, output raw JSON directly):
 {{
