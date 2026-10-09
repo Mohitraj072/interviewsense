@@ -3,7 +3,7 @@
 > AI-powered mock interview platform with voice input, Gemini-powered evaluation, and detailed performance analytics.
 
 [![Live Demo](https://img.shields.io/badge/Live%20Demo-Visit%20Site-blue?style=for-the-badge)](https://interviewsense-app.vercel.app)
-[![GitHub](https://img.shields.io/badge/GitHub-Repository-black?style=for-the-badge&logo=github)](https://github.com/Mohitraj072/interviewsense-ai)
+[![GitHub](https://img.shields.io/badge/GitHub-Repository-black?style=for-the-badge&logo=github)](https://github.com/Mohitraj072/interviewsense)
 
 ---
 
@@ -16,13 +16,12 @@
 
 ## ✨ Features
 
-- 🎤 **Voice Input** — Real-time speech-to-text with live transcription and filler word detection
-- 🤖 **AI Question Generation** — Google Gemini generates personalized questions by domain and difficulty
-- 📄 **Resume Upload** — Upload your PDF resume and get questions tailored to your experience
-- 📊 **Detailed Reports** — Radar chart, score breakdown, strengths, improvements, and study plan
-- 🔐 **Firebase Auth** — Google login and email/password authentication
-- 💾 **Firestore Storage** — All interviews and reports saved and accessible from dashboard
-- 📈 **Dashboard Analytics** — Average score, best score, streak tracker, and interview history
+- 🎤 **Voice and Text Interviews** — Practice speaking aloud with real-time browser speech recognition or type answers in text mode.
+- 🎯 **Questions Tailored to a Pasted Job Description** — Paste any job description to dynamically generate interview questions tailored to the specific skills, tools, and responsibilities.
+- ⚡ **Instant Feedback and Scoring** — Receive comprehensive evaluations, constructive feedback, scoring, and ideal answers immediately after answering.
+- 📊 **Speaking Analytics** — Real-time pacing insights (Words Per Minute) and filler word detection ("um", "uh", "like", "you know", etc.) for voice answers with actionable delivery verdicts.
+- 📈 **Progress Tracking** — Track past interview sessions, category performance trends, and key strengths and improvement areas over time.
+- 🌓 **Dark & Light Mode** — Seamless theme toggle with a responsive interface designed for desktop and mobile viewports.
 
 ---
 
@@ -38,88 +37,56 @@
 
 ---
 
-## 📋 Interview Modes
+## ⚙️ How It Works
 
-| Type | Domains | Difficulty |
-|---|---|---|
-| Technical | DSA, Web Dev, OS, DBMS, System Design, OOPs | Easy / Medium / Hard |
-| HR | Behavioral, Situational | Easy / Medium / Hard |
-| Mixed | Technical + HR combined | Easy / Medium / Hard |
-
----
-
-## 🏗️ Project Structure
-
-```
-interviewsense-ai/
-├── frontend/                  # React + Vite + Tailwind
-│   ├── src/
-│   │   ├── components/        # Shared UI components
-│   │   └── pages/
-│   │       ├── Landing.jsx
-│   │       ├── Dashboard.jsx
-│   │       ├── Interview.jsx
-│   │       └── Report.jsx
-│   └── vite.config.js
-└── backend/                   # Flask Python API
-    ├── routes/
-    │   ├── interview.py
-    │   └── report.py
-    ├── prompts/
-    ├── app.py
-    ├── Procfile
-    └── requirements.txt
-```
+1. **Configure Interview**: Choose your interview domain, difficulty level, and format (voice or text), or paste a target job description to tailor the questions.
+2. **Practice in Real Time**: Answer interview questions using your microphone or keyboard. Speech recognition captures spoken answers and tracks timing.
+3. **AI Evaluation & Analytics**: Gemini evaluates responses across core competencies, while pacing and filler word detection analyze speaking delivery.
+4. **Performance Report**: Review your Skill Competency Radar, strengths, areas for growth, speaking analytics, and per-question feedback.
 
 ---
 
-## ⚡ Quick Start
+## 💻 Run Locally
 
-### 1. Clone the repo
-
+### 1. Clone the repository
 ```bash
-git clone https://github.com/Mohitraj072/interviewsense-ai.git
-cd interviewsense-ai
+git clone https://github.com/Mohitraj072/interviewsense.git
+cd interviewsense
 ```
 
 ### 2. Frontend Setup
-
 ```bash
 cd frontend
 npm install
-cp .env.example .env    # Fill in your Firebase config + backend URL
-npm run dev             # Runs on http://localhost:5173
+npm run dev
 ```
 
 ### 3. Backend Setup
-
 ```bash
 cd backend
 python -m venv venv
-venv\Scripts\activate   # Windows
+# Windows:
+venv\Scripts\activate
+# macOS/Linux:
+# source venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env    # Fill in your Gemini API key
-python app.py           # Runs on http://localhost:5000
+python app.py
 ```
 
-### 4. Environment Variables
+### Required Environment Variables
 
-**Frontend** (`.env`):
-```
-VITE_API_URL=http://localhost:5000
-VITE_FIREBASE_API_KEY=your_key
-VITE_FIREBASE_AUTH_DOMAIN=your_domain
-VITE_FIREBASE_PROJECT_ID=your_project_id
-VITE_FIREBASE_STORAGE_BUCKET=your_bucket
-VITE_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
-VITE_FIREBASE_APP_ID=your_app_id
-```
+#### Frontend (`frontend/.env`)
+- `VITE_API_URL`
+- `VITE_FIREBASE_API_KEY`
+- `VITE_FIREBASE_AUTH_DOMAIN`
+- `VITE_FIREBASE_PROJECT_ID`
+- `VITE_FIREBASE_STORAGE_BUCKET`
+- `VITE_FIREBASE_MESSAGING_SENDER_ID`
+- `VITE_FIREBASE_APP_ID`
 
-**Backend** (`.env`):
-```
-GEMINI_API_KEY=your_gemini_api_key
-FRONTEND_URL=http://localhost:5173
-```
+#### Backend (`backend/.env`)
+- `GEMINI_API_KEY`
+- `FRONTEND_URL`
 
 ---
 
@@ -132,24 +99,7 @@ FRONTEND_URL=http://localhost:5173
 | POST | `/api/interview/start` | Start a new interview session |
 | POST | `/api/interview/next` | Evaluate answer + get next question |
 | POST | `/api/interview/end` | End session + generate report |
-| POST | `/api/resume/extract` | Upload resume for personalized questions |
 | POST | `/api/report/generate` | Generate full performance report |
-
----
-
-## 📸 Screenshots
-
-> Landing page → Interview screen → AI-powered report with radar chart
-
----
-
-## 🧑‍💻 Built By
-
-**Mohit Raj** — 2nd year BTech student  
-Built in a single day as a full-stack AI project.
-
-[![LinkedIn](https://img.shields.io/badge/LinkedIn-Connect-blue?style=flat&logo=linkedin)](https://www.linkedin.com/in/mohitraj07)
-
 
 ---
 

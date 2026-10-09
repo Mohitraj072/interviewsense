@@ -81,6 +81,29 @@ function ScoreGauge({ score = 0, verdict = 'Strong' }) {
 }
 
 // ─── Dynamic Radar Chart (SVG based for bulletproof rendering) ──────────────
+const SKILL_LABEL_MAP = {
+  depth_of_knowledge: 'Depth of Knowledge',
+  problem_solving: 'Problem Solving',
+  technical_accuracy: 'Technical Accuracy',
+  communication: 'Communication',
+  confidence: 'Confidence',
+}
+
+function getSkillLabel(rawKey) {
+  if (!rawKey) return ''
+  const key = String(rawKey).toLowerCase().trim()
+  if (SKILL_LABEL_MAP[key]) return SKILL_LABEL_MAP[key]
+  if (key.includes('depth')) return 'Depth of Knowledge'
+  if (key.includes('problem')) return 'Problem Solving'
+  if (key.includes('accuracy') || key.includes('tech')) return 'Technical Accuracy'
+  if (key.includes('comm')) return 'Communication'
+  if (key.includes('confid')) return 'Confidence'
+  return key
+    .split('_')
+    .map((w) => (w === 'of' ? 'of' : w.charAt(0).toUpperCase() + w.slice(1)))
+    .join(' ')
+}
+
 function SkillRadarSVG({ skills = {} }) {
   const axes = [
     { key: 'technical_accuracy', label: 'Technical Accuracy' },
@@ -237,13 +260,13 @@ function SpeakingAnalyticsCard({ questions = [] }) {
   )
 
   // Verdict calculation:
-  // under 110 wpm = "a bit slow", 110-160 = "good pace", over 160 = "a bit fast"
+  // under 100 wpm = "a bit slow", 100-165 = "good pace", over 165 = "a bit fast"
   let paceVerdict = 'good pace'
   let paceVerdictBadge = 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-  if (avgWpm < 110) {
+  if (avgWpm < 100) {
     paceVerdict = 'a bit slow'
     paceVerdictBadge = 'bg-amber-500/10 text-amber-400 border-amber-500/30'
-  } else if (avgWpm > 160) {
+  } else if (avgWpm > 165) {
     paceVerdict = 'a bit fast'
     paceVerdictBadge = 'bg-amber-500/10 text-amber-400 border-amber-500/30'
   }
@@ -318,24 +341,34 @@ function SpeakingAnalyticsCard({ questions = [] }) {
             <span className="text-2xl font-black text-text-primary font-mono">{avgWpm}</span>
             <span className="text-xs text-text-secondary font-medium">WPM</span>
           </div>
-          <p className="text-[11px] text-text-muted">Target: 110 – 160 WPM</p>
+          <p className="text-[11px] text-text-muted">Target: 100 – 165 WPM</p>
         </div>
 
         {/* Tile 2: Filler Words */}
         <div className="p-4 rounded-xl bg-surface/60 border border-surface-border flex flex-col justify-between">
-          <span className="text-[11px] font-medium text-text-muted uppercase tracking-wider">Total Filler Words</span>
+          <span className="text-[11px] font-medium text-text-muted uppercase tracking-wider">
+            {totalFillers === 1 ? 'Total Filler Word' : 'Total Filler Words'}
+          </span>
           <div className="flex items-baseline gap-2 mt-2 mb-1">
             <span className="text-2xl font-black text-text-primary font-mono">{totalFillers}</span>
-            <span className="text-xs text-text-secondary font-medium">detected</span>
+            <span className="text-xs text-text-secondary font-medium">
+              {totalFillers === 1 ? 'filler' : 'fillers'}
+            </span>
           </div>
           <p className="text-[11px] text-text-muted">
-            {totalFillers === 0 ? 'Flawless vocal flow' : `${totalFillers} fillers across answers`}
+            {totalFillers === 0
+              ? 'Flawless vocal flow'
+              : totalFillers === 1
+              ? '1 filler across answers'
+              : `${totalFillers} fillers across answers`}
           </p>
         </div>
 
         {/* Tile 3: Top Fillers */}
         <div className="p-4 rounded-xl bg-surface/60 border border-surface-border flex flex-col justify-between">
-          <span className="text-[11px] font-medium text-text-muted uppercase tracking-wider">Top Fillers</span>
+          <span className="text-[11px] font-medium text-text-muted uppercase tracking-wider">
+            {topFillers.length === 1 ? 'Top Filler' : 'Top Fillers'}
+          </span>
           <div className="flex flex-wrap gap-1.5 mt-2 mb-1">
             {topFillers.length > 0 ? (
               topFillers.map(([word, count]) => {
@@ -344,7 +377,11 @@ function SpeakingAnalyticsCard({ questions = [] }) {
                   <span
                     key={word}
                     className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold bg-surface border border-surface-border text-text-primary"
-                    title={isPossible ? `"${word}" is counted as a possible filler` : `"${word}" is a filler word`}
+                    title={
+                      isPossible
+                        ? `"${word}" is counted as a possible filler (${count} ${count === 1 ? 'occurrence' : 'occurrences'})`
+                        : `"${word}" is a filler word (${count} ${count === 1 ? 'occurrence' : 'occurrences'})`
+                    }
                   >
                     <span>"{word}"</span>
                     <span className="text-brand-indigo font-mono text-[11px]">×{count}</span>
@@ -359,7 +396,11 @@ function SpeakingAnalyticsCard({ questions = [] }) {
             )}
           </div>
           <p className="text-[11px] text-text-muted">
-            {topFillers.length > 0 ? 'Top 3 most frequent words' : 'Crisp articulation'}
+            {topFillers.length === 0
+              ? 'Crisp articulation'
+              : topFillers.length === 1
+              ? 'Most frequent filler'
+              : `Top ${topFillers.length} most frequent fillers`}
           </p>
         </div>
       </div>
@@ -370,7 +411,7 @@ function SpeakingAnalyticsCard({ questions = [] }) {
           <span className="font-semibold text-text-primary">Pace Per Question (WPM)</span>
           <div className="flex items-center gap-3 text-[10px] text-text-muted">
             <span className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-emerald-400" /> 110-160 WPM (Good)
+              <span className="w-2 h-2 rounded-full bg-emerald-400" /> 100-165 WPM (Good)
             </span>
             <span className="flex items-center gap-1">
               <span className="w-2 h-2 rounded-full bg-amber-400" /> Outside target
@@ -383,7 +424,7 @@ function SpeakingAnalyticsCard({ questions = [] }) {
           {voiceQuestions.map((q, idx) => {
             const w = q.wpm || 0
             const pct = Math.min(100, Math.round((w / maxWpm) * 100))
-            const isGood = w >= 110 && w <= 160
+            const isGood = w >= 100 && w <= 165
             const qNum = q.questionNumber || idx + 1
 
             return (
@@ -392,12 +433,12 @@ function SpeakingAnalyticsCard({ questions = [] }) {
                   Q{qNum}
                 </span>
                 <div className="flex-1 h-5 rounded-md bg-surface border border-surface-border/60 relative overflow-hidden flex items-center">
-                  {/* Optimal zone background indicator (110-160 WPM) */}
+                  {/* Optimal zone background indicator (100-165 WPM) */}
                   <div
                     className="absolute top-0 bottom-0 bg-emerald-500/5 border-x border-emerald-500/20 pointer-events-none"
                     style={{
-                      left: `${(110 / maxWpm) * 100}%`,
-                      width: `${((160 - 110) / maxWpm) * 100}%`,
+                      left: `${(100 / maxWpm) * 100}%`,
+                      width: `${((165 - 100) / maxWpm) * 100}%`,
                     }}
                   />
                   {/* Actual WPM bar */}
@@ -1070,13 +1111,18 @@ export default function Report() {
               <SkillRadarSVG skills={reportData.skill_radar} />
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 w-full pt-4 border-t border-surface-border text-center">
-              {Object.entries(reportData.skill_radar || {}).map(([key, val]) => (
-                <div key={key} className="p-1.5 rounded-lg bg-surface-DEFAULT/50">
-                  <p className="text-[10px] text-text-muted truncate capitalize">
-                    {key.replace('_', ' ')}
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 w-full pt-4 border-t border-surface-border text-center">
+              {Object.entries(reportData.skill_radar || {}).map(([key, val], idx, arr) => (
+                <div
+                  key={key}
+                  className={`p-2 rounded-lg bg-surface-DEFAULT/50 border border-surface-border/40 flex flex-col items-center justify-between min-h-[4.25rem] ${
+                    arr.length % 2 === 1 && idx === arr.length - 1 ? 'col-span-2 sm:col-span-1' : ''
+                  }`}
+                >
+                  <p className="text-[10px] sm:text-[11px] text-text-muted font-medium leading-tight text-center break-words w-full">
+                    {getSkillLabel(key)}
                   </p>
-                  <p className="text-xs font-bold text-brand-indigo">{val}%</p>
+                  <p className="text-xs sm:text-sm font-bold text-brand-indigo mt-1">{val}%</p>
                 </div>
               ))}
             </div>
