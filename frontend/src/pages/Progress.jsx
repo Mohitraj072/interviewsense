@@ -748,16 +748,42 @@ export default function Progress() {
                         Overall interview performance improvement trend across sessions
                       </p>
                     </div>
-                    <span
-                      className="text-xs font-semibold px-2.5 py-1 rounded-full"
-                      style={{
-                        backgroundColor: 'rgba(124, 58, 237, 0.12)',
-                        color: '#7C3AED',
-                        border: '1px solid rgba(124, 58, 237, 0.25)',
-                      }}
-                    >
-                      {analytics.totalInterviews} {analytics.totalInterviews === 1 ? 'Session' : 'Sessions'}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      {(() => {
+                        if (reports.length < 2) return null
+                        const latest = reports[reports.length - 1]
+                        const prev = reports[reports.length - 2]
+                        const lScore = latest?.totalScore ?? latest?.score
+                        const pScore = prev?.totalScore ?? prev?.score
+                        if (typeof lScore === 'number' && typeof pScore === 'number' && lScore > pScore) {
+                          const delta = lScore - pScore
+                          return (
+                            <span
+                              className="text-xs font-bold px-2.5 py-1 rounded-full flex items-center gap-1 text-emerald-400"
+                              style={{
+                                backgroundColor: 'rgba(16, 185, 129, 0.12)',
+                                border: '1px solid rgba(16, 185, 129, 0.3)',
+                              }}
+                              title={`Latest attempt improved by ${delta} points`}
+                            >
+                              <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
+                              Improvement (+{delta})
+                            </span>
+                          )
+                        }
+                        return null
+                      })()}
+                      <span
+                        className="text-xs font-semibold px-2.5 py-1 rounded-full"
+                        style={{
+                          backgroundColor: 'rgba(124, 58, 237, 0.12)',
+                          color: '#7C3AED',
+                          border: '1px solid rgba(124, 58, 237, 0.25)',
+                        }}
+                      >
+                        {analytics.totalInterviews} {analytics.totalInterviews === 1 ? 'Session' : 'Sessions'}
+                      </span>
+                    </div>
                   </div>
 
                   <div className="h-64 sm:h-72 w-full mt-2">

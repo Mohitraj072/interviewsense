@@ -1163,9 +1163,28 @@ export default function Dashboard() {
                   </div>
                 ) : (
                   <div className="space-y-3.5">
-                    {history.map((item) => {
+                    {history.map((item, index) => {
                       const rawScore = item.totalScore ?? item.score ?? 70
                       const score = typeof rawScore === 'number' ? rawScore : 70
+
+                      // Check if this is the most recent attempt and score improved compared to previous attempt
+                      const isMostRecent = index === 0
+                      let isImprovement = false
+                      let improvementDelta = 0
+
+                      if (isMostRecent && history.length > 1) {
+                        const earlierAttempt = history.slice(1).find(
+                          (h) => (h.domain || 'Technical').toLowerCase().trim() === (item.domain || 'Technical').toLowerCase().trim()
+                        ) || history[1]
+
+                        if (earlierAttempt) {
+                          const prevScore = earlierAttempt.totalScore ?? earlierAttempt.score
+                          if (typeof score === 'number' && typeof prevScore === 'number' && score > prevScore) {
+                            isImprovement = true
+                            improvementDelta = score - prevScore
+                          }
+                        }
+                      }
 
                       // Overall score color: green >70, yellow 50-70, red <50
                       const isGreen = score > 70
@@ -1266,6 +1285,21 @@ export default function Dashboard() {
                                   >
                                     {verdictLabel}
                                   </span>
+
+                                  {/* Improvement badge for most recent attempt if score went up */}
+                                  {isImprovement && (
+                                    <span
+                                      className="text-xs font-bold px-2.5 py-0.5 rounded-lg flex items-center gap-1 text-emerald-400"
+                                      style={{
+                                        background: 'rgba(16, 185, 129, 0.12)',
+                                        border: '1px solid rgba(16, 185, 129, 0.3)',
+                                      }}
+                                      title={`Score increased by ${improvementDelta} points compared to previous attempt`}
+                                    >
+                                      <TrendingUp className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                                      <span>Improvement (+{improvementDelta})</span>
+                                    </span>
+                                  )}
                                 </div>
 
                                 {/* Subtitle with date and question count */}

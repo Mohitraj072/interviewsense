@@ -6,8 +6,9 @@ import {
   CheckCircle2, AlertTriangle, Sparkles, Target,
   MessageSquare, BookOpen, ChevronDown, ChevronUp, BarChart3,
   ShieldCheck, RefreshCw, Loader2, Briefcase, Mic, Info,
+  TrendingUp, TrendingDown, Minus, History,
 } from 'lucide-react'
-import { doc, getDoc, collection, addDoc, serverTimestamp } from 'firebase/firestore'
+import { doc, getDoc, collection, addDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore'
 import { auth, db } from '../firebase'
 import { useAuth } from '../context/AuthContext'
 import ThemeToggle from '../components/ThemeToggle'
@@ -526,6 +527,362 @@ function SpeakingAnalyticsCard({ questions = [] }) {
   )
 }
 
+// ─── Previous Attempt Comparison Card ───────────────────────────────────────
+function PreviousAttemptComparisonCard({
+  reportData,
+  sessionMeta,
+  previousAttempt,
+  noEarlierAttempt,
+  loading,
+}) {
+  // If comparison query is still resolving, show a sleek subtle skeleton
+  if (loading) {
+    return (
+      <div className="glass-card p-4 sm:p-5 rounded-2xl flex items-center justify-center gap-2.5 text-xs text-text-muted border border-surface-border">
+        <Loader2 className="w-4 h-4 animate-spin text-brand-indigo" />
+        <span>Checking for previous interview attempts…</span>
+      </div>
+    )
+  }
+
+  // Friendly note when no earlier attempt exists in this domain
+  if (noEarlierAttempt || !previousAttempt) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 15 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="glass-card p-5 sm:p-6 rounded-2xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+        style={{
+          background: 'rgba(99, 102, 241, 0.04)',
+          borderColor: 'rgba(99, 102, 241, 0.18)',
+        }}
+      >
+        <div className="flex items-start gap-3.5">
+          <div className="w-10 h-10 rounded-xl bg-brand-indigo/10 border border-brand-indigo/25 flex items-center justify-center flex-shrink-0 text-brand-indigo mt-0.5">
+            <History className="w-5 h-5" />
+          </div>
+          <div>
+            <h3 className="text-sm sm:text-base font-bold text-text-primary flex items-center gap-2">
+              <span>Compared with your last attempt</span>
+            </h3>
+            <p className="text-xs text-text-secondary mt-1 leading-relaxed">
+              <strong className="text-brand-indigo font-semibold">Retake this interview to see your progress</strong>. Once you complete another attempt in {sessionMeta?.config?.domain || reportData?.domain || 'this domain'}, you'll unlock overall score deltas, pace tracking, and skill radar improvements.
+            </p>
+          </div>
+        </div>
+        <Link
+          to="/interview"
+          state={{ config: sessionMeta?.config }}
+          className="btn-secondary text-xs py-2 px-3.5 rounded-xl flex items-center gap-1.5 flex-shrink-0 font-semibold cursor-pointer self-stretch sm:self-auto justify-center"
+        >
+          <RotateCcw className="w-3.5 h-3.5" />
+          <span>Retake Interview</span>
+        </Link>
+      </motion.div>
+    )
+  }
+
+  // Helper to format timestamps cleanly
+  const formatDate = (createdAt, fallbackText) => {
+    if (!createdAt) return fallbackText
+    let d = null
+    if (createdAt?.toDate) d = createdAt.toDate()
+    else if (createdAt?.seconds) d = new Date(createdAt.seconds * 1000)
+    else if (typeof createdAt === 'string' || typeof createdAt === 'number') d = new Date(createdAt)
+    if (d && !isNaN(d.getTime())) {
+      return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    }
+    return fallbackText
+  }
+
+  const currentDateStr = formatDate(reportData?.createdAt, 'Current Attempt')
+  const previousDateStr = formatDate(previousAttempt.createdAt, 'Previous Attempt')
+
+  // Calculate Questions Answered count for fairness
+  const currQuestions = reportData?.per_question || sessionMeta?.qaHistory || []
+  const prevQuestions = previousAttempt?.questions || previousAttempt?.qaHistory || []
+
+  const currAnswered = currQuestions.filter((q) => !q.skipped && typeof q.score === 'number').length
+  const currTotal = currQuestions.length || 5
+  const prevAnswered = prevQuestions.filter((q) => !q.skipped && typeof q.score === 'number').length
+  const prevTotal = prevQuestions.length || 5
+
+  const hasSkippedInEither = currAnswered < currTotal || prevAnswered < prevTotal
+
+  // Overall Score Delta
+  const currScore = typeof reportData?.overall_score === 'number' ? reportData.overall_score : null
+  const prevScore = typeof previousAttempt?.totalScore === 'number'
+    ? previousAttempt.totalScore
+    : typeof previousAttempt?.score === 'number'
+    ? previousAttempt.score
+    : null
+
+  const hasScoreDelta = currScore !== null && prevScore !== null
+  const scoreDelta = hasScoreDelta ? currScore - prevScore : null
+
+  // Average Speaking Pace (WPM) Delta
+  const getAvgWpm = (list) => {
+    if (!Array.isArray(list)) return null
+    const voice = list.filter(
+      (q) => q.inputMode === 'voice' && !q.skipped && !q.tooShort && typeof q.wpm === 'number' && q.wpm > 0
+    )
+    if (voice.length === 0) return null
+    return Math.round(voice.reduce((s, q) => s + q.wpm, 0) / voice.length)
+  }
+
+  const currAvgWpm = getAvgWpm(currQuestions)
+  const prevAvgWpm = getAvgWpm(prevQuestions)
+  const hasPaceDelta = currAvgWpm !== null && prevAvgWpm !== null
+  const paceDelta = hasPaceDelta ? currAvgWpm - prevAvgWpm : null
+
+  // 5 Radar Competency Categories
+  const RADAR_CATEGORIES = [
+    { key: 'technical_accuracy', label: 'Technical Accuracy' },
+    { key: 'communication', label: 'Communication' },
+    { key: 'confidence', label: 'Confidence' },
+    { key: 'depth_of_knowledge', label: 'Depth of Knowledge' },
+    { key: 'problem_solving', label: 'Problem Solving' },
+  ]
+
+  const currRadar = reportData?.skill_radar || {}
+  const prevRadar = previousAttempt?.radarScores || previousAttempt?.skill_radar || {}
+
+  const radarDeltas = RADAR_CATEGORIES.map(({ key, label }) => {
+    const cVal = currRadar[key]
+    const pVal = prevRadar[key]
+    const hasValues = typeof cVal === 'number' && typeof pVal === 'number'
+    const delta = hasValues ? cVal - pVal : null
+    return {
+      key,
+      label,
+      currVal: typeof cVal === 'number' ? cVal : null,
+      prevVal: typeof pVal === 'number' ? pVal : null,
+      delta,
+      hasValues,
+    }
+  })
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 15 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="glass-card p-4 sm:p-6 rounded-2xl relative overflow-hidden space-y-4 sm:space-y-5"
+      style={{
+        background: 'linear-gradient(135deg, rgba(99,102,241,0.06) 0%, rgba(16,185,129,0.03) 100%)',
+        border: '1px solid rgba(99,102,241,0.22)',
+        boxShadow: 'var(--card-shadow)',
+      }}
+    >
+      {/* Top Header: Title, Dates, Context */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-surface-border/60 pb-4">
+        <div className="flex items-start sm:items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-brand-indigo/15 border border-brand-indigo/30 flex items-center justify-center flex-shrink-0 text-brand-indigo mt-0.5 sm:mt-0">
+            <History className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-sm sm:text-base md:text-lg font-bold text-text-primary">
+                Compared with your last attempt
+              </h2>
+              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-surface border border-surface-border text-text-secondary">
+                {previousAttempt.domain || sessionMeta?.config?.domain || 'Technical'}
+                {previousAttempt.difficulty ? ` • ${previousAttempt.difficulty}` : ''}
+              </span>
+            </div>
+            <p className="text-xs text-text-muted mt-0.5 flex flex-wrap items-center gap-1">
+              <span>This attempt ({currentDateStr})</span>
+              <span className="opacity-60">•</span>
+              <span>Last attempt ({previousDateStr})</span>
+            </p>
+          </div>
+        </div>
+
+        {/* Retake button quick link */}
+        <Link
+          to="/interview"
+          state={{ config: sessionMeta?.config }}
+          className="btn-secondary text-xs py-1.5 px-3 rounded-lg flex items-center gap-1.5 self-start sm:self-auto cursor-pointer"
+          title="Retake this interview"
+        >
+          <RotateCcw className="w-3.5 h-3.5" />
+          <span>Retake</span>
+        </Link>
+      </div>
+
+      {/* Metrics Row: Score Delta + Pace Delta */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+        {/* Overall Score Delta Card */}
+        <div className="p-3.5 sm:p-4 rounded-xl bg-surface/70 border border-surface-border flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <span className="text-[11px] font-semibold text-text-muted uppercase tracking-wider block">
+              Overall Score Change
+            </span>
+            {hasScoreDelta ? (
+              <div className="flex items-baseline gap-2 mt-1">
+                <span
+                  className={`text-xl sm:text-2xl font-black font-heading flex items-center gap-1 ${
+                    scoreDelta > 0
+                      ? 'text-emerald-400'
+                      : scoreDelta < 0
+                      ? 'text-rose-400'
+                      : 'text-text-secondary'
+                  }`}
+                >
+                  {scoreDelta > 0 ? (
+                    <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
+                  ) : scoreDelta < 0 ? (
+                    <TrendingDown className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
+                  ) : (
+                    <Minus className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
+                  )}
+                  <span>{scoreDelta > 0 ? `+${scoreDelta}` : scoreDelta} points</span>
+                </span>
+              </div>
+            ) : (
+              <span className="text-xs sm:text-sm text-text-muted mt-1 block">Score not available</span>
+            )}
+            <p className="text-[11px] text-text-muted mt-0.5 truncate">
+              {currScore !== null ? `${currScore}/100` : '—'} now vs{' '}
+              {prevScore !== null ? `${prevScore}/100` : '—'} previously
+            </p>
+          </div>
+
+          <div
+            className={`w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${
+              scoreDelta > 0
+                ? 'bg-emerald-500/10 border border-emerald-500/25 text-emerald-400'
+                : scoreDelta < 0
+                ? 'bg-rose-500/10 border border-rose-500/25 text-rose-400'
+                : 'bg-surface border border-surface-border text-text-muted'
+            }`}
+          >
+            <span className="text-sm sm:text-base font-black font-mono">
+              {hasScoreDelta ? (scoreDelta > 0 ? `+${scoreDelta}` : `${scoreDelta}`) : '—'}
+            </span>
+          </div>
+        </div>
+
+        {/* Speaking Pace Delta Card (Shown only if both attempts have voice analytics) */}
+        {hasPaceDelta ? (
+          <div className="p-3.5 sm:p-4 rounded-xl bg-surface/70 border border-surface-border flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <span className="text-[11px] font-semibold text-text-muted uppercase tracking-wider block">
+                Average Pace Change
+              </span>
+              <div className="flex items-baseline gap-2 mt-1">
+                <span
+                  className={`text-xl sm:text-2xl font-black font-heading flex items-center gap-1 ${
+                    paceDelta > 0
+                      ? 'text-indigo-400'
+                      : paceDelta < 0
+                      ? 'text-amber-400'
+                      : 'text-text-secondary'
+                  }`}
+                >
+                  {paceDelta > 0 ? (
+                    <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
+                  ) : paceDelta < 0 ? (
+                    <TrendingDown className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
+                  ) : (
+                    <Minus className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
+                  )}
+                  <span>{paceDelta > 0 ? `+${paceDelta}` : paceDelta} WPM</span>
+                </span>
+              </div>
+              <p className="text-[11px] text-text-muted mt-0.5 truncate">
+                {currAvgWpm} WPM now vs {prevAvgWpm} WPM previously
+              </p>
+            </div>
+
+            <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-indigo-500/10 border border-indigo-500/25 text-indigo-400 flex items-center justify-center flex-shrink-0">
+              <Mic className="w-4 h-4 sm:w-5 sm:h-5" />
+            </div>
+          </div>
+        ) : (
+          <div className="p-3.5 sm:p-4 rounded-xl bg-surface/50 border border-surface-border/60 flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-surface border border-surface-border flex items-center justify-center flex-shrink-0 text-text-muted">
+              <Mic className="w-4 h-4" />
+            </div>
+            <div>
+              <span className="text-xs font-semibold text-text-primary block">
+                Speaking Pace Comparison
+              </span>
+              <p className="text-[11px] text-text-muted mt-0.5 leading-snug">
+                Pace delta displays when both attempts include analyzed voice responses.
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Radar Category Shift Breakdown (Technical Accuracy, Communication, Confidence, Depth of Knowledge, Problem Solving) */}
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-xs font-bold text-text-secondary uppercase tracking-wider">
+            Category Competency Shift
+          </span>
+          <span className="text-[11px] text-text-muted">5 Radar Vectors</span>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+          {radarDeltas.map((cat, idx, arr) => {
+            const isSpanned = arr.length % 2 === 1 && idx === arr.length - 1
+            const isPos = cat.delta !== null && cat.delta > 0
+            const isNeg = cat.delta !== null && cat.delta < 0
+
+            return (
+              <div
+                key={cat.key}
+                className={`p-2.5 rounded-xl bg-surface/80 border border-surface-border flex flex-col justify-between min-h-[4.75rem] ${
+                  isSpanned ? 'col-span-2 sm:col-span-1' : ''
+                }`}
+              >
+                <span className="text-[10px] sm:text-[11px] font-semibold text-text-primary leading-tight truncate" title={cat.label}>
+                  {cat.label}
+                </span>
+
+                <div className="flex items-center justify-between mt-2 pt-1.5 border-t border-surface-border/50">
+                  <div className="text-[10px] sm:text-[11px] text-text-muted">
+                    {cat.currVal !== null ? `${cat.currVal}%` : '—'}
+                    <span className="text-[9px] sm:text-[10px] opacity-60 ml-0.5">({cat.prevVal !== null ? `${cat.prevVal}%` : '—'})</span>
+                  </div>
+
+                  {cat.hasValues ? (
+                    <span
+                      className={`text-[10px] sm:text-[11px] font-black font-mono px-1 sm:px-1.5 py-0.5 rounded-md flex items-center gap-0.5 ${
+                        isPos
+                          ? 'text-emerald-400 bg-emerald-500/10'
+                          : isNeg
+                          ? 'text-rose-400 bg-rose-500/10'
+                          : 'text-text-muted bg-surface'
+                      }`}
+                    >
+                      {isPos && '+'}
+                      {cat.delta}
+                    </span>
+                  ) : (
+                    <span className="text-[10px] text-text-muted italic">—</span>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Fairness Note when skipped questions are present */}
+      {hasSkippedInEither && (
+        <div className="pt-2 border-t border-surface-border/60 flex items-center gap-2 text-xs text-text-muted">
+          <Info className="w-4 h-4 text-brand-indigo flex-shrink-0" />
+          <span>
+            Based on {currAnswered} answered questions in this attempt (vs {prevAnswered} in previous attempt). Overall scores and category deltas exclude skipped questions.
+          </span>
+        </div>
+      )}
+    </motion.div>
+  )
+}
+
 // ─── Main Report Page ───────────────────────────────────────────────────────
 export default function Report() {
   const { id } = useParams()
@@ -533,6 +890,7 @@ export default function Report() {
   const navigate = useNavigate()
   const { user } = useAuth()
   const hasSavedRef = useRef(false)
+  const savedReportDocIdRef = useRef(null)
 
   const [loading, setLoading] = useState(true)
   const [reportData, setReportData] = useState(null)
@@ -541,6 +899,13 @@ export default function Report() {
   const [copiedLink, setCopiedLink] = useState(false)
   const [isServerWaking, setIsServerWaking] = useState(false)
   const [reportError, setReportError] = useState(null)
+
+  const [comparisonState, setComparisonState] = useState({
+    loading: true,
+    previousAttempt: null,
+    noEarlierAttempt: false,
+    visible: true,
+  })
 
   const fetchOrCreateReport = async () => {
     setLoading(true)
@@ -700,6 +1065,7 @@ export default function Report() {
               domain: config?.domain || 'General',
               difficulty: config?.difficulty || 'Medium',
               type: config?.type || 'Technical',
+              sessionId: sessionId || null,
               totalScore: overallScore,
               verdict: overallVerdict,
               questions: finalQuestions.map((q) => {
@@ -737,8 +1103,9 @@ export default function Report() {
               reportDoc.hasJobDescription = true
               reportDoc.jobTitle = (config?.jobTitle || '').slice(0, 60)
             }
-            await addDoc(collection(db, 'reports'), reportDoc)
-            console.log('Report saved to Firestore reports collection')
+            const docRef = await addDoc(collection(db, 'reports'), reportDoc)
+            savedReportDocIdRef.current = docRef.id
+            console.log('Report saved to Firestore reports collection with ID:', docRef.id)
           } catch (fsErr) {
             console.error('Error saving report to Firestore:', fsErr)
           }
@@ -919,6 +1286,124 @@ export default function Report() {
   useEffect(() => {
     fetchOrCreateReport()
   }, [id, location.state, user])
+
+  // Fetch user's earlier reports with the same domain (and difficulty)
+  useEffect(() => {
+    const targetUser = user || auth.currentUser
+    if (!targetUser) {
+      setComparisonState({ loading: false, previousAttempt: null, noEarlierAttempt: true, visible: true })
+      return
+    }
+
+    if (!reportData) return
+
+    let isMounted = true
+    setComparisonState((prev) => ({ ...prev, loading: true }))
+
+    const fetchPreviousAttempt = async () => {
+      try {
+        const q = query(
+          collection(db, 'reports'),
+          where('userId', '==', targetUser.uid)
+        )
+        const snap = await getDocs(q)
+        let list = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+
+        // Fallback to legacy interviews collection if empty
+        if (list.length === 0) {
+          try {
+            const legacyQ = query(
+              collection(db, 'interviews'),
+              where('userId', '==', targetUser.uid)
+            )
+            const legacySnap = await getDocs(legacyQ)
+            list = legacySnap.docs.map((d) => ({ id: d.id, ...d.data() }))
+          } catch {}
+        }
+
+        if (!isMounted) return
+
+        // Sort chronologically descending (newest to oldest) in browser memory
+        list.sort((a, b) => {
+          const tA = a.createdAt?.toMillis?.() || (a.createdAt?.seconds ? a.createdAt.seconds * 1000 : 0)
+          const tB = b.createdAt?.toMillis?.() || (b.createdAt?.seconds ? b.createdAt.seconds * 1000 : 0)
+          return tB - tA
+        })
+
+        const currentDomain = sessionMeta?.config?.domain || reportData?.domain || 'General'
+        const currentDifficulty = sessionMeta?.config?.difficulty || reportData?.difficulty || null
+        const currentSessionId = sessionMeta?.sessionId || id
+
+        // Exclude current report
+        const filteredList = list.filter((r) => {
+          if (id && r.id === id) return false
+          if (savedReportDocIdRef.current && r.id === savedReportDocIdRef.current) return false
+          if (currentSessionId && (r.sessionId === currentSessionId || r.id === currentSessionId)) return false
+          const rTime = r.createdAt?.toMillis?.() || (r.createdAt?.seconds ? r.createdAt.seconds * 1000 : 0)
+          const isJustNow = rTime > 0 && Math.abs(Date.now() - rTime) < 15000
+          if (isJustNow && (r.domain || '').toLowerCase().trim() === currentDomain.toLowerCase().trim() && r.totalScore === reportData?.overall_score) {
+            return false
+          }
+          return true
+        })
+
+        // Filter by same domain (case-insensitive)
+        const domainMatches = filteredList.filter(
+          (r) => (r.domain || '').toLowerCase().trim() === currentDomain.toLowerCase().trim()
+        )
+
+        if (domainMatches.length === 0) {
+          if (isMounted) {
+            setComparisonState({
+              loading: false,
+              previousAttempt: null,
+              noEarlierAttempt: true,
+              visible: true,
+            })
+          }
+          return
+        }
+
+        // Prefer earlier attempt with the same difficulty if available
+        let bestMatch = null
+        if (currentDifficulty) {
+          bestMatch = domainMatches.find(
+            (r) => (r.difficulty || '').toLowerCase().trim() === currentDifficulty.toLowerCase().trim()
+          )
+        }
+        // Fallback to most recent attempt in the same domain
+        if (!bestMatch) {
+          bestMatch = domainMatches[0]
+        }
+
+        if (isMounted) {
+          setComparisonState({
+            loading: false,
+            previousAttempt: bestMatch,
+            noEarlierAttempt: false,
+            visible: true,
+          })
+        }
+      } catch (err) {
+        // Silently catch and hide comparison card without breaking the report
+        console.warn('Silent fallback: could not fetch previous attempt:', err)
+        if (isMounted) {
+          setComparisonState({
+            loading: false,
+            previousAttempt: null,
+            noEarlierAttempt: false,
+            visible: false,
+          })
+        }
+      }
+    }
+
+    fetchPreviousAttempt()
+
+    return () => {
+      isMounted = false
+    }
+  }, [user, reportData, sessionMeta, id])
 
   const handleShare = () => {
     navigator.clipboard.writeText(window.location.href)
@@ -1138,6 +1623,17 @@ export default function Report() {
             </div>
           </div>
         </motion.div>
+
+        {/* Previous Attempt Comparison Card */}
+        {comparisonState.visible && (
+          <PreviousAttemptComparisonCard
+            reportData={reportData}
+            sessionMeta={sessionMeta}
+            previousAttempt={comparisonState.previousAttempt}
+            noEarlierAttempt={comparisonState.noEarlierAttempt}
+            loading={comparisonState.loading}
+          />
+        )}
 
         {/* 2-Column: Radar Chart + Key Stats */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
