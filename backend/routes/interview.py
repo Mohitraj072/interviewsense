@@ -222,6 +222,8 @@ def check_follow_up():
     domain = data.get("domain", "DSA")
     difficulty = data.get("difficulty", "Medium")
     raw_jd = data.get("jobDescription") or data.get("job_description") or ""
+    raw_style = data.get("interviewerStyle") or data.get("interviewer_style")
+    interviewer_style = raw_style if raw_style in {"Friendly coach", "Standard", "Tough", "Rapid-fire"} else "Standard"
 
     # Silently return null if answer is too short (< 15 words) or empty
     words = [w for w in answer.split() if w]
@@ -239,6 +241,7 @@ def check_follow_up():
             domain=domain,
             difficulty=difficulty,
             job_description=str(raw_jd).strip()[:3000] if raw_jd else "",
+            interviewer_style=interviewer_style,
         )
 
         response = generate_content_with_fallback(prompt)

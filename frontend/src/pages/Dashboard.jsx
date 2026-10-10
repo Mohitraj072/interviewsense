@@ -443,6 +443,7 @@ export function NewInterviewModal({ onClose, onStart, initialRole = 'Software En
     type: 'Technical',
     difficulty: 'Medium',
     domain: 'DSA',
+    interviewerStyle: 'Standard',
     timePerQuestion: 120,
   })
   const [modalJobDescription, setModalJobDescription] = useState('')
@@ -498,6 +499,7 @@ export function NewInterviewModal({ onClose, onStart, initialRole = 'Software En
         difficulty: resumeDifficulty,
         domain: `Resume · ${targetRole}`,
         isResumeBased: true,
+        interviewerStyle: config.interviewerStyle || 'Standard',
         customQuestions: questions,
         timePerQuestion: config.timePerQuestion !== undefined ? config.timePerQuestion : 120,
       })
@@ -619,6 +621,37 @@ export function NewInterviewModal({ onClose, onStart, initialRole = 'Software En
               </div>
             </div>
 
+            {/* Interviewer Style */}
+            <div>
+              <label className="block text-xs font-semibold text-text-secondary mb-1.5">Interviewer Style</label>
+              <div className="grid grid-cols-2 gap-1.5">
+                {[
+                  { id: 'Friendly coach', label: 'Friendly coach', desc: 'Encouraging hints' },
+                  { id: 'Standard', label: 'Standard', desc: 'Default balanced' },
+                  { id: 'Tough', label: 'Tough', desc: 'Rigorous & probing' },
+                  { id: 'Rapid-fire', label: 'Rapid-fire', desc: 'Concise & fast' },
+                ].map((s) => {
+                  const active = (config.interviewerStyle || 'Standard') === s.id
+                  return (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => setConfig((c) => ({ ...c, interviewerStyle: s.id }))}
+                      className="py-2 px-2.5 rounded-xl text-left transition-all"
+                      style={{
+                        border: `1px solid ${active ? '#6366F1' : 'var(--surface-border)'}`,
+                        background: active ? 'rgba(99,102,241,0.12)' : 'var(--pill-bg)',
+                        color: active ? '#6366F1' : 'var(--text-secondary)',
+                      }}
+                    >
+                      <div className="font-semibold text-xs leading-none">{s.label}</div>
+                      <div className="text-[10px] text-text-muted mt-1">{s.desc}</div>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
             {/* Time per Question */}
             <div>
               <label className="block text-xs font-semibold text-text-secondary mb-1.5">Time per Question</label>
@@ -711,6 +744,7 @@ export function NewInterviewModal({ onClose, onStart, initialRole = 'Software En
                 id="btn-start-interview"
                 onClick={() => onStart({
                   ...config,
+                  interviewerStyle: config.interviewerStyle || 'Standard',
                   jobDescription: modalJobDescription.trim(),
                   resumeText: modalResumeText.trim(),
                   autoStart: true,

@@ -20,6 +20,7 @@
 - 🎯 **Questions Tailored to a Pasted Job Description** — Paste any job description to dynamically generate interview questions tailored to the specific skills, tools, and responsibilities.
 - 🎯 **Targeted practice from your weakest areas** — Automatically analyzes your past interviews to practice your lowest-scoring categories and questions.
 - 📄 **Questions based on your own resume** — Paste your resume during setup to generate targeted questions probing your actual projects, tools, internships, and claims.
+- 🎭 **Choose your interviewer style** — Pick between Friendly coach, Standard, Tough, or Rapid-fire personas to simulate realistic interviewer behaviors and follow-ups.
 - 🔄 **Adaptive AI Follow-Up Questions** — Dynamically generates context-aware follow-up questions on substantial answers to probe deeper technical depth and implementation trade-offs.
 - ⚡ **Instant Feedback and Scoring** — Receive comprehensive evaluations, constructive feedback, scoring, and ideal answers immediately after answering.
 - 📊 **Speaking Analytics** — Real-time pacing insights (Words Per Minute) and filler word detection ("um", "uh", "like", "you know", etc.) for voice answers with actionable delivery verdicts.

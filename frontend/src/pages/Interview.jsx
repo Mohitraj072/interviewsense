@@ -29,6 +29,10 @@ import {
   RefreshCw,
   Briefcase,
   ShieldCheck,
+  Smile,
+  UserCheck,
+  Flame,
+  Zap,
 } from 'lucide-react'
 import axios from 'axios'
 import { useAuth } from '../context/AuthContext'
@@ -85,6 +89,42 @@ const DOMAINS = [
     desc: 'SOLID, Polymorphism, Abstraction, Design Patterns',
     icon: Boxes,
     gradient: 'from-[#EC4899] to-[#F43F5E]',
+  },
+]
+
+// ── Interviewer Styles list ──────────────────────────────────────────────────
+export const INTERVIEWER_STYLES = [
+  {
+    id: 'Friendly coach',
+    label: 'Friendly coach',
+    desc: 'Encouraging, gives gentle hints',
+    icon: Smile,
+    color: '#10B981',
+    badge: 'Encouraging',
+  },
+  {
+    id: 'Standard',
+    label: 'Standard',
+    desc: 'Current behavior, the default',
+    icon: UserCheck,
+    color: '#6366F1',
+    badge: 'Default',
+  },
+  {
+    id: 'Tough',
+    label: 'Tough',
+    desc: 'Probing, challenges assumptions, expects precise answers',
+    icon: Flame,
+    color: '#EF4444',
+    badge: 'Rigorous',
+  },
+  {
+    id: 'Rapid-fire',
+    label: 'Rapid-fire',
+    desc: 'Short, direct questions that expect concise answers',
+    icon: Zap,
+    color: '#F59E0B',
+    badge: 'Under 25 words',
   },
 ]
 
@@ -330,6 +370,11 @@ export default function Interview() {
   const [interviewType, setInterviewType] = useState('Technical') // 'Technical' | 'HR' | 'Mixed' | 'Resume-Based'
   const [selectedDomain, setSelectedDomain] = useState('DSA')
   const [difficulty, setDifficulty] = useState('Medium') // 'Easy' | 'Medium' | 'Hard'
+  const [interviewerStyle, setInterviewerStyle] = useState(
+    incomingState?.interviewerStyle && ['Friendly coach', 'Standard', 'Tough', 'Rapid-fire'].includes(incomingState.interviewerStyle)
+      ? incomingState.interviewerStyle
+      : 'Standard'
+  )
   const [questionCount, setQuestionCount] = useState(5) // 5 | 8 | 10
   const [timePerQuestion, setTimePerQuestion] = useState(120) // in seconds: 0 | 60 | 120 | 180. Default: 2 minutes (120)
   const [timeLeft, setTimeLeft] = useState(120) // countdown in seconds
@@ -387,6 +432,9 @@ export default function Interview() {
         if (incomingState.weakSpots) setWeakSpots(incomingState.weakSpots)
         if (incomingState.domain) setSelectedDomain(incomingState.domain)
         if (incomingState.difficulty) setDifficulty(incomingState.difficulty)
+        if (incomingState.interviewerStyle && ['Friendly coach', 'Standard', 'Tough', 'Rapid-fire'].includes(incomingState.interviewerStyle)) {
+          setInterviewerStyle(incomingState.interviewerStyle)
+        }
         if (incomingState.isResumeBased) setIsResumeActive(true)
         if (incomingState.resumeText) {
           setResumeText(incomingState.resumeText.slice(0, 6000))
@@ -413,6 +461,7 @@ export default function Interview() {
             jobDescription: incomingState.jobDescription || '',
             resumeText: incomingState.resumeText || '',
             weakSpots: incomingState.weakSpots || null,
+            interviewerStyle: incomingState.interviewerStyle || interviewerStyle || 'Standard',
           })
         }
       }
@@ -597,6 +646,7 @@ export default function Interview() {
     const useDifficulty = overrideParams?.difficulty || difficulty
     const useCount = overrideParams?.count || questionCount
     const useTime = overrideParams?.timePerQuestion !== undefined ? overrideParams.timePerQuestion : timePerQuestion
+    const useStyle = overrideParams?.interviewerStyle || interviewerStyle || 'Standard'
 
     const activeResumeText = (overrideParams?.resumeText !== undefined ? overrideParams.resumeText : resumeText)?.trim() || ''
     const activeJd = (overrideParams?.jobDescription !== undefined ? overrideParams.jobDescription : jobDescription)?.trim() || ''
@@ -610,6 +660,7 @@ export default function Interview() {
         formData.append('difficulty', difficulty)
         formData.append('count', questionCount)
         formData.append('type', interviewType)
+        formData.append('interviewerStyle', useStyle)
 
         const response = await axios.post(`${API_BASE}/api/resume/extract`, formData, {
           headers: { 'Content-Type': 'multipart/form-data' },
@@ -680,6 +731,7 @@ export default function Interview() {
         count: useCount,
         jobDescription: activeJd,
         resumeText: activeResumeText,
+        interviewerStyle: useStyle,
       }
       if (activeWeakSpots) {
         requestPayload.weakSpots = activeWeakSpots
@@ -704,6 +756,9 @@ export default function Interview() {
       if (cleanList.length > 0) {
         setQuestions(cleanList)
         setIsResumeActive(Boolean(response.data?.hasResume || activeResumeText))
+        if (response.data?.interviewerStyle) {
+          setInterviewerStyle(response.data.interviewerStyle)
+        }
         if (response.data?.resumeSummary) {
           setResumeSummary(response.data.resumeSummary)
         } else {
@@ -834,6 +889,7 @@ export default function Interview() {
             domain: selectedDomain,
             difficulty,
             count: questions.length,
+            interviewerStyle: interviewerStyle || 'Standard',
             isResumeBased: isResumeActive,
             hasResume: isResumeActive,
             hasJobDescription: Boolean(jobDescription.trim() || hasJobDescription),
@@ -956,6 +1012,7 @@ export default function Interview() {
             domain: selectedDomain,
             difficulty,
             jobDescription: (jobDescription || '').trim(),
+            interviewerStyle: interviewerStyle || 'Standard',
           },
           { timeout: 8000 }
         )
@@ -1327,7 +1384,71 @@ export default function Interview() {
               </div>
             </div>
 
-            {/* 3. Difficulty & Question Count */}
+            {/* 3. Interviewer Style */}
+            <div
+              className="p-4 sm:p-6 rounded-2xl"
+              style={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)', boxShadow: 'var(--card-shadow)' }}
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                <label className="block text-xs font-bold text-text-secondary uppercase tracking-wider">
+                  3. Interviewer Style
+                </label>
+                <span className="text-[11px] text-text-muted">
+                  Calibrates tone and follow-up probing style
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                {INTERVIEWER_STYLES.map((item) => {
+                  const Icon = item.icon
+                  const active = interviewerStyle === item.id
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => setInterviewerStyle(item.id)}
+                      className="p-4 rounded-xl text-left transition-all duration-200 cursor-pointer relative flex flex-col justify-between"
+                      style={{
+                        background: active ? `${item.color}15` : 'var(--pill-bg)',
+                        border: active ? `1.5px solid ${item.color}` : '1px solid var(--surface-border)',
+                        boxShadow: active ? `0 0 20px ${item.color}25` : 'none',
+                      }}
+                    >
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <div
+                            className="w-8 h-8 rounded-lg flex items-center justify-center transition-transform duration-200"
+                            style={{
+                              background: active ? item.color : 'rgba(255, 255, 255, 0.05)',
+                              color: active ? '#ffffff' : 'var(--text-secondary)',
+                            }}
+                          >
+                            <Icon className="w-4 h-4" />
+                          </div>
+                          <span
+                            className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                            style={{
+                              background: active ? `${item.color}25` : 'rgba(255, 255, 255, 0.05)',
+                              color: active ? item.color : 'var(--text-muted)',
+                            }}
+                          >
+                            {item.badge}
+                          </span>
+                        </div>
+                        <div className="font-bold text-sm text-text-primary flex items-center justify-between">
+                          <span>{item.label}</span>
+                          {active && <Check className="w-4 h-4 flex-shrink-0 ml-1" style={{ color: item.color }} />}
+                        </div>
+                        <div className="text-[11px] text-text-muted mt-1 leading-snug">
+                          {item.desc}
+                        </div>
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* 4. Difficulty & 5. Question Count */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               {/* Difficulty */}
               <div
@@ -1335,7 +1456,7 @@ export default function Interview() {
                 style={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)', boxShadow: 'var(--card-shadow)' }}
               >
                 <label className="block text-xs font-bold text-text-secondary uppercase tracking-wider mb-3">
-                  3. Difficulty Level
+                  4. Difficulty Level
                 </label>
                 <div className="grid grid-cols-3 gap-2">
                   {[
@@ -1370,7 +1491,7 @@ export default function Interview() {
                 style={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)', boxShadow: 'var(--card-shadow)' }}
               >
                 <label className="block text-xs font-bold text-text-secondary uppercase tracking-wider mb-3">
-                  4. Number of Questions
+                  5. Number of Questions
                 </label>
                 <div className="grid grid-cols-3 gap-2">
                   {[

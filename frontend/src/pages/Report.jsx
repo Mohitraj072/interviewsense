@@ -6,7 +6,7 @@ import {
   CheckCircle2, AlertTriangle, Sparkles, Target,
   MessageSquare, BookOpen, ChevronDown, ChevronUp, BarChart3,
   ShieldCheck, RefreshCw, Loader2, Briefcase, Mic, Info,
-  TrendingUp, TrendingDown, Minus, History,
+  TrendingUp, TrendingDown, Minus, History, UserCheck,
 } from 'lucide-react'
 import { doc, getDoc, collection, addDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore'
 import { auth, db } from '../firebase'
@@ -1047,6 +1047,7 @@ export default function Report() {
           recommended_resources: finalReport?.recommended_resources || [],
           next_steps: finalReport?.next_steps || '',
           per_question: finalQuestions,
+          interviewerStyle: config?.interviewerStyle || stateData?.config?.interviewerStyle || 'Standard',
         }
 
         setReportData(completedReport)
@@ -1068,6 +1069,7 @@ export default function Report() {
               domain: config?.domain || 'General',
               difficulty: config?.difficulty || 'Medium',
               type: config?.type || 'Technical',
+              interviewerStyle: String(config?.interviewerStyle || stateData?.config?.interviewerStyle || 'Standard'),
               sessionId: sessionId || null,
               totalScore: overallScore,
               verdict: overallVerdict,
@@ -1171,6 +1173,7 @@ export default function Report() {
               type: data.type || 'Technical',
               domain: data.domain || 'Technical',
               difficulty: data.difficulty || 'Medium',
+              interviewerStyle: data.interviewerStyle || 'Standard',
               summary: data.summary || `Performance record for ${data.domain || 'Technical'} mock interview (${data.difficulty || 'Medium'}).`,
               skill_radar: data.radarScores || {
                 technical_accuracy: Math.min(95, avgScore + 2),
@@ -1202,6 +1205,7 @@ export default function Report() {
                 domain: data.domain,
                 difficulty: data.difficulty,
                 type: data.type,
+                interviewerStyle: data.interviewerStyle || 'Standard',
                 hasJobDescription: Boolean(data.hasJobDescription),
                 jobTitle: data.jobTitle || '',
               },
@@ -1517,6 +1521,12 @@ export default function Report() {
             <span className="text-xs text-text-muted">
               {sessionMeta?.config?.difficulty || 'Medium'} difficulty
             </span>
+            {(sessionMeta?.config?.interviewerStyle || reportData?.interviewerStyle) && (
+              <span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-surface border border-surface-border text-brand-indigo flex items-center gap-1.5">
+                <UserCheck className="w-3.5 h-3.5" />
+                <span>{sessionMeta?.config?.interviewerStyle || reportData?.interviewerStyle}</span>
+              </span>
+            )}
             {(sessionMeta?.config?.type === 'Weak-spot practice' || reportData?.type === 'Weak-spot practice') && (
               <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/25 text-amber-400 flex items-center gap-1.5">
                 <Target className="w-3.5 h-3.5" />
@@ -1595,6 +1605,11 @@ export default function Report() {
                     <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-brand-indigo/10 border border-brand-indigo/30 text-brand-indigo">
                       <Sparkles className="w-3.5 h-3.5" /> Interview Performance Report
                     </div>
+                    {(sessionMeta?.config?.interviewerStyle || reportData?.interviewerStyle) && (
+                      <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-brand-indigo/10 border border-brand-indigo/25 text-brand-indigo">
+                        <UserCheck className="w-3.5 h-3.5" /> Style: <strong className="text-text-primary">{sessionMeta?.config?.interviewerStyle || reportData?.interviewerStyle}</strong>
+                      </div>
+                    )}
                     {(sessionMeta?.config?.type === 'Weak-spot practice' || reportData?.type === 'Weak-spot practice') && (
                       <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/15 border border-amber-500/30 text-amber-400">
                         <Target className="w-3.5 h-3.5" /> Weak-spot practice
