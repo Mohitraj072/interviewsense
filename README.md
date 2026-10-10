@@ -18,6 +18,7 @@
 
 - 🎤 **Voice and Text Interviews** — Practice speaking aloud with real-time browser speech recognition or type answers in text mode.
 - 🎯 **Questions Tailored to a Pasted Job Description** — Paste any job description to dynamically generate interview questions tailored to the specific skills, tools, and responsibilities.
+- 🔄 **Adaptive AI Follow-Up Questions** — Dynamically generates context-aware follow-up questions on substantial answers to probe deeper technical depth and implementation trade-offs.
 - ⚡ **Instant Feedback and Scoring** — Receive comprehensive evaluations, constructive feedback, scoring, and ideal answers immediately after answering.
 - 📊 **Speaking Analytics** — Real-time pacing insights (Words Per Minute) and filler word detection ("um", "uh", "like", "you know", etc.) for voice answers with actionable delivery verdicts.
 - 📈 **Progress Tracking** — Track past interview sessions, category performance trends, and key strengths and improvement areas over time.

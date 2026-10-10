@@ -127,6 +127,11 @@ def generate_report():
                 "tooShort": bool(pair.get("tooShort")),
             }
 
+            if pair.get("followUpQuestion"):
+                q_item["followUpQuestion"] = pair.get("followUpQuestion")
+                q_item["followUpAnswer"] = pair.get("followUpAnswer", "")
+                q_item["followUpSkipped"] = bool(pair.get("followUpSkipped"))
+
             if is_skipped:
                 q_item["answer"] = ""
                 q_item["score"] = None

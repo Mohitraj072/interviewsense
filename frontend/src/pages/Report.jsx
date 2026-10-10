@@ -611,6 +611,9 @@ export default function Report() {
             inputMode,
             tooShort: isTooShort,
             duration: hist.duration ?? pq.duration ?? 0,
+            followUpQuestion: pq.followUpQuestion || hist.followUpQuestion || null,
+            followUpAnswer: pq.followUpAnswer || hist.followUpAnswer || '',
+            followUpSkipped: Boolean(pq.followUpSkipped || hist.followUpSkipped),
           }
 
           if (typeof hist.wpm === 'number' || typeof pq.wpm === 'number') {
@@ -711,6 +714,9 @@ export default function Report() {
                   improvements: q.improvements || [],
                   inputMode: q.inputMode || 'text',
                   tooShort: Boolean(q.tooShort),
+                  followUpQuestion: q.followUpQuestion || null,
+                  followUpAnswer: q.followUpAnswer || '',
+                  followUpSkipped: Boolean(q.followUpSkipped),
                 }
                 if (typeof q.wpm === 'number' && !q.tooShort && !q.skipped) {
                   qDoc.wpm = q.wpm
@@ -770,6 +776,9 @@ export default function Report() {
                 improvements: isSkipped ? [] : (q.improvements || []),
                 inputMode: q.inputMode || 'text',
                 tooShort: Boolean(q.tooShort),
+                followUpQuestion: q.followUpQuestion || null,
+                followUpAnswer: q.followUpAnswer || '',
+                followUpSkipped: Boolean(q.followUpSkipped),
               }
               if (typeof q.wpm === 'number' && !q.tooShort && !isSkipped) {
                 qObj.wpm = q.wpm
@@ -1325,6 +1334,36 @@ export default function Report() {
                               </p>
                             )}
                           </div>
+
+                          {/* Follow-up Question & Response */}
+                          {item.followUpQuestion && (
+                            <div
+                              className="p-3.5 rounded-xl space-y-2"
+                              style={{
+                                background: 'rgba(99, 102, 241, 0.07)',
+                                border: '1px solid rgba(99, 102, 241, 0.25)',
+                              }}
+                            >
+                              <p className="font-semibold text-brand-indigo mb-1 flex items-center gap-1.5 text-xs">
+                                <Sparkles className="w-3.5 h-3.5" /> Follow-up Question:
+                              </p>
+                              <p className="text-text-primary text-xs font-semibold leading-relaxed">
+                                {item.followUpQuestion}
+                              </p>
+                              <div className="pt-2 border-t border-brand-indigo/15">
+                                <p className="text-[11px] font-semibold text-text-muted mb-0.5">
+                                  Your Follow-up Response:
+                                </p>
+                                <p className="text-text-secondary leading-relaxed italic text-xs">
+                                  {item.followUpSkipped
+                                    ? '(Follow-up was skipped)'
+                                    : item.followUpAnswer
+                                    ? `"${item.followUpAnswer}"`
+                                    : '[No response recorded]'}
+                                </p>
+                              </div>
+                            </div>
+                          )}
 
                           {/* AI Detailed Feedback */}
                           {item.feedback && (

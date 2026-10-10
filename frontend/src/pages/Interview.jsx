@@ -457,6 +457,9 @@ export default function Interview() {
   const [isManualEditing, setIsManualEditing] = useState(false)
   const [questionStartTime, setQuestionStartTime] = useState(Date.now())
   const [inputMode, setInputMode] = useState('voice') // 'voice' | 'text'
+  const [followUpCount, setFollowUpCount] = useState(0) // max 2 follow-ups per session
+  const [isCheckingFollowUp, setIsCheckingFollowUp] = useState(false)
+  const [activeFollowUp, setActiveFollowUp] = useState(null)
 
   const handleModeChange = (mode) => {
     if (mode === inputMode) return
@@ -604,6 +607,9 @@ export default function Interview() {
           setCurrentIndex(0)
           setAnswers([])
           setTimerSeconds(0)
+          setFollowUpCount(0)
+          setIsCheckingFollowUp(false)
+          setActiveFollowUp(null)
           setTimeLeft(useTime)
           setQuestionStartTime(Date.now())
           resetTranscript('')
@@ -663,6 +669,9 @@ export default function Interview() {
         setCurrentIndex(0)
         setAnswers([])
         setTimerSeconds(0)
+        setFollowUpCount(0)
+        setIsCheckingFollowUp(false)
+        setActiveFollowUp(null)
         setTimeLeft(useTime)
         setQuestionStartTime(Date.now())
         resetTranscript('')
@@ -700,6 +709,9 @@ export default function Interview() {
     setCurrentIndex(0)
     setAnswers([])
     setTimerSeconds(0)
+    setFollowUpCount(0)
+    setIsCheckingFollowUp(false)
+    setActiveFollowUp(null)
     setTimeLeft(timePerQuestion)
     setQuestionStartTime(Date.now())
     resetTranscript('')
@@ -716,39 +728,8 @@ export default function Interview() {
     }
   }
 
-  // Complete current question and advance
-  const handleAdvance = (skipped = false) => {
-    stopListening()
-
-    const finalAnswer = skipped ? '' : transcript.trim()
-    const questionDuration = Math.round((Date.now() - questionStartTime) / 1000)
-
-    // Compute speaking analytics ONLY for voice-mode answers that are not skipped
-    const analytics =
-      inputMode === 'voice' && !skipped
-        ? computeSpeakingAnalytics(finalAnswer, questionDuration)
-        : null
-
-    const answerRecord = {
-      questionIndex: currentIndex,
-      questionText: questions[currentIndex],
-      answer: finalAnswer,
-      skipped,
-      duration: questionDuration,
-      inputMode,
-      tooShort: Boolean(analytics?.tooShort),
-    }
-
-    if (analytics) {
-      answerRecord.wpm = analytics.wpm
-      answerRecord.wordCount = analytics.wordCount
-      answerRecord.durationSec = analytics.durationSec
-      answerRecord.fillerCount = analytics.fillerCount
-      answerRecord.fillerBreakdown = analytics.fillerBreakdown
-      answerRecord.definiteFillerCount = analytics.definiteFillerCount
-      answerRecord.possibleFillerCount = analytics.possibleFillerCount
-    }
-
+  // Advance to next question or complete session
+  const advanceToNextOrReport = (answerRecord) => {
     const updatedAnswers = [...answers, answerRecord]
     setAnswers(updatedAnswers)
 
@@ -770,6 +751,11 @@ export default function Interview() {
           duration: item.duration,
           inputMode: item.inputMode,
           tooShort: Boolean(item.tooShort),
+        }
+        if (item.followUpQuestion) {
+          qaItem.followUpQuestion = item.followUpQuestion
+          qaItem.followUpAnswer = item.followUpAnswer || ''
+          qaItem.followUpSkipped = Boolean(item.followUpSkipped)
         }
         if (typeof item.wpm === 'number' && !item.tooShort && !item.skipped) {
           qaItem.wpm = item.wpm
@@ -812,6 +798,137 @@ export default function Interview() {
         setTimeLeft(timePerQuestion)
       }
     }
+  }
+
+  // Handle follow-up submission or skip
+  const handleFollowUpAdvance = (skipped = false) => {
+    stopListening()
+    if (!activeFollowUp) return
+
+    const followUpAnswer = skipped ? '' : transcript.trim()
+    const followUpDuration = Math.round((Date.now() - questionStartTime) / 1000)
+
+    const answerRecord = {
+      questionIndex: currentIndex,
+      questionText: questions[currentIndex],
+      answer: activeFollowUp.mainAnswer,
+      skipped: false,
+      duration: (activeFollowUp.mainDuration || 0) + followUpDuration,
+      inputMode: activeFollowUp.mainInputMode,
+      tooShort: Boolean(activeFollowUp.mainAnalytics?.tooShort),
+      followUpQuestion: activeFollowUp.question,
+      followUpAnswer,
+      followUpSkipped: Boolean(skipped),
+    }
+
+    if (activeFollowUp.mainAnalytics) {
+      answerRecord.wpm = activeFollowUp.mainAnalytics.wpm
+      answerRecord.wordCount = activeFollowUp.mainAnalytics.wordCount
+      answerRecord.durationSec = activeFollowUp.mainAnalytics.durationSec
+      answerRecord.fillerCount = activeFollowUp.mainAnalytics.fillerCount
+      answerRecord.fillerBreakdown = activeFollowUp.mainAnalytics.fillerBreakdown
+      answerRecord.definiteFillerCount = activeFollowUp.mainAnalytics.definiteFillerCount
+      answerRecord.possibleFillerCount = activeFollowUp.mainAnalytics.possibleFillerCount
+    }
+
+    setActiveFollowUp(null)
+    advanceToNextOrReport(answerRecord)
+  }
+
+  // Complete current question and advance (or check for adaptive follow-up)
+  const handleAdvance = async (skipped = false) => {
+    stopListening()
+
+    // If currently answering a follow-up question, delegate to handleFollowUpAdvance
+    if (activeFollowUp) {
+      handleFollowUpAdvance(skipped)
+      return
+    }
+
+    const finalAnswer = skipped ? '' : transcript.trim()
+    const questionDuration = Math.round((Date.now() - questionStartTime) / 1000)
+
+    // Compute speaking analytics ONLY for voice-mode answers that are not skipped
+    const analytics =
+      inputMode === 'voice' && !skipped
+        ? computeSpeakingAnalytics(finalAnswer, questionDuration)
+        : null
+
+    const answerRecord = {
+      questionIndex: currentIndex,
+      questionText: questions[currentIndex],
+      answer: finalAnswer,
+      skipped,
+      duration: questionDuration,
+      inputMode,
+      tooShort: Boolean(analytics?.tooShort),
+    }
+
+    if (analytics) {
+      answerRecord.wpm = analytics.wpm
+      answerRecord.wordCount = analytics.wordCount
+      answerRecord.durationSec = analytics.durationSec
+      answerRecord.fillerCount = analytics.fillerCount
+      answerRecord.fillerBreakdown = analytics.fillerBreakdown
+      answerRecord.definiteFillerCount = analytics.definiteFillerCount
+      answerRecord.possibleFillerCount = analytics.possibleFillerCount
+    }
+
+    // Check if eligible for AI follow-up:
+    // - NOT skipped
+    // - At least 15 words
+    // - At most 2 follow-ups per 5-question interview
+    // - Never more than one follow-up per question
+    const wordCount = finalAnswer.split(/\s+/).filter(Boolean).length
+    const isEligibleForFollowUp = !skipped && wordCount >= 15 && followUpCount < 2
+
+    if (isEligibleForFollowUp) {
+      setIsCheckingFollowUp(true)
+      try {
+        const response = await axios.post(
+          `${API_BASE}/api/interview/follow-up`,
+          {
+            question: questions[currentIndex],
+            answer: finalAnswer,
+            domain: selectedDomain,
+            difficulty,
+            jobDescription: (jobDescription || '').trim(),
+          },
+          { timeout: 8000 }
+        )
+
+        if (
+          response.data &&
+          response.data.followUp &&
+          typeof response.data.followUp === 'string' &&
+          response.data.followUp.trim()
+        ) {
+          setFollowUpCount((prev) => prev + 1)
+          setActiveFollowUp({
+            question: response.data.followUp.trim(),
+            mainAnswer: finalAnswer,
+            mainDuration: questionDuration,
+            mainInputMode: inputMode,
+            mainAnalytics: analytics,
+          })
+          resetTranscript('')
+          setIsManualEditing(false)
+          setQuestionStartTime(Date.now())
+          if (timePerQuestion > 0) {
+            setTimeLeft(timePerQuestion)
+          }
+          setIsCheckingFollowUp(false)
+          return
+        }
+      } catch (err) {
+        // Silently continue without a follow-up on error or >8s timeout
+        console.warn('Silent continuation: follow-up check timed out or failed:', err)
+      } finally {
+        setIsCheckingFollowUp(false)
+      }
+    }
+
+    advanceToNextOrReport(answerRecord)
   }
 
   // Keep ref up to date
@@ -1383,6 +1500,12 @@ export default function Interview() {
             <span className="text-xs font-extrabold px-2.5 py-1 rounded-md bg-[#6366F1]/20 text-[#818CF8] border border-[#6366F1]/30">
               Q {currentIndex + 1} / {questions.length}
             </span>
+            {activeFollowUp && (
+              <span className="text-xs font-extrabold px-2.5 py-1 rounded-md bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 flex items-center gap-1 animate-pulse">
+                <Sparkles className="w-3 h-3 text-indigo-400" />
+                Follow-up
+              </span>
+            )}
 
             {/* Countdown Timer next to question counter */}
             {timePerQuestion > 0 && timerStyles && (
@@ -1440,7 +1563,11 @@ export default function Interview() {
           }}
         >
           <div className="flex items-center justify-between mb-3 text-xs font-semibold">
-            {isResumeActive ? (
+            {activeFollowUp ? (
+              <span className="flex items-center gap-1.5 uppercase tracking-wider text-[11px] text-text-muted font-semibold">
+                Original Question {currentIndex + 1}
+              </span>
+            ) : isResumeActive ? (
               <span className="flex items-center gap-1.5 uppercase tracking-wider text-[11px] text-emerald-400 font-bold">
                 <Sparkles className="w-3.5 h-3.5" />
                 Resume-Personalized Question {currentIndex + 1}
@@ -1456,10 +1583,50 @@ export default function Interview() {
             </span>
           </div>
 
-          <h2 className="text-xl sm:text-2xl font-bold text-text-primary leading-relaxed">
+          <h2 className={`leading-relaxed ${activeFollowUp ? 'text-base sm:text-lg font-medium text-text-secondary' : 'text-xl sm:text-2xl font-bold text-text-primary'}`}>
             {currentQuestion}
           </h2>
         </motion.div>
+
+        {/* Follow-up Question Card */}
+        <AnimatePresence>
+          {activeFollowUp && (
+            <motion.div
+              id="card-active-followup"
+              initial={{ opacity: 0, y: 12, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -12, scale: 0.98 }}
+              transition={{ duration: 0.3 }}
+              className="mt-4 p-5 sm:p-6 rounded-2xl relative overflow-hidden"
+              style={{
+                background: 'rgba(99, 102, 241, 0.08)',
+                border: '1px solid rgba(99, 102, 241, 0.35)',
+                boxShadow: '0 8px 30px rgba(99, 102, 241, 0.12)',
+              }}
+            >
+              <div className="flex items-center justify-between mb-3 text-xs font-semibold flex-wrap gap-2">
+                <span className="flex items-center gap-1.5 uppercase tracking-wider text-[11px] text-[#818CF8] font-bold">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  Follow-up Question (Under Q{currentIndex + 1})
+                </span>
+                <span className="text-[11px] text-text-muted">
+                  Answer below via {inputMode}
+                </span>
+              </div>
+
+              <h3 className="text-lg sm:text-xl font-bold text-text-primary leading-relaxed mb-3">
+                {activeFollowUp.question}
+              </h3>
+
+              <div className="p-3 rounded-xl bg-surface/70 border border-surface-border text-xs">
+                <span className="font-semibold text-text-muted">Your initial response: </span>
+                <span className="text-text-secondary italic">
+                  "{activeFollowUp.mainAnswer.length > 160 ? `${activeFollowUp.mainAnswer.slice(0, 160)}...` : activeFollowUp.mainAnswer}"
+                </span>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Center Microphone & Recording Section (Voice Mode only) */}
         <AnimatePresence mode="wait">
@@ -1709,27 +1876,64 @@ export default function Interview() {
         </AnimatePresence>
 
         {/* Action Bottom Bar */}
-        <div className="mt-6 flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-3">
-          <button
-            id="btn-skip-question"
-            type="button"
-            onClick={() => handleAdvance(true)}
-            className="btn-secondary w-full sm:w-auto px-5 py-3 text-xs font-semibold justify-center cursor-pointer"
-          >
-            <SkipForward className="w-4 h-4" />
-            <span>Skip Question</span>
-          </button>
+        {activeFollowUp ? (
+          <div className="mt-6 flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-3">
+            <button
+              id="btn-skip-followup"
+              type="button"
+              onClick={() => handleFollowUpAdvance(true)}
+              className="btn-secondary w-full sm:w-auto px-5 py-3 text-xs font-semibold justify-center cursor-pointer"
+            >
+              <SkipForward className="w-4 h-4" />
+              <span>Skip follow-up</span>
+            </button>
 
-          <button
-            id="btn-submit-answer"
-            type="button"
-            onClick={() => handleAdvance(false)}
-            className="btn-primary w-full sm:w-auto py-3 px-6 sm:px-7 rounded-xl text-xs font-bold justify-center transition-all duration-200 cursor-pointer"
-          >
-            <span>{currentIndex + 1 === questions.length ? 'Finish & Generate Report' : 'Submit Answer'}</span>
-            <ArrowRight className="w-4 h-4" />
-          </button>
-        </div>
+            <button
+              id="btn-submit-followup"
+              type="button"
+              onClick={() => handleFollowUpAdvance(false)}
+              className="btn-primary w-full sm:w-auto py-3 px-6 sm:px-7 rounded-xl text-xs font-bold justify-center transition-all duration-200 cursor-pointer shadow-lg shadow-indigo-500/25"
+            >
+              <span>
+                {currentIndex + 1 === questions.length ? 'Submit Follow-up & Finish' : 'Submit Follow-up & Next'}
+              </span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+        ) : (
+          <div className="mt-6 flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-3">
+            <button
+              id="btn-skip-question"
+              type="button"
+              disabled={isCheckingFollowUp}
+              onClick={() => handleAdvance(true)}
+              className="btn-secondary w-full sm:w-auto px-5 py-3 text-xs font-semibold justify-center cursor-pointer disabled:opacity-50"
+            >
+              <SkipForward className="w-4 h-4" />
+              <span>Skip Question</span>
+            </button>
+
+            <button
+              id="btn-submit-answer"
+              type="button"
+              disabled={isCheckingFollowUp}
+              onClick={() => handleAdvance(false)}
+              className="btn-primary w-full sm:w-auto py-3 px-6 sm:px-7 rounded-xl text-xs font-bold justify-center transition-all duration-200 cursor-pointer disabled:opacity-75 shadow-lg shadow-indigo-500/25"
+            >
+              {isCheckingFollowUp ? (
+                <div className="flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin text-white flex-shrink-0" />
+                  <span>AI analyzing for follow-up...</span>
+                </div>
+              ) : (
+                <>
+                  <span>{currentIndex + 1 === questions.length ? 'Finish & Generate Report' : 'Submit Answer'}</span>
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              )}
+            </button>
+          </div>
+        )}
       </main>
 
       {/* Exit confirmation modal */}

@@ -18,6 +18,7 @@ from prompts.templates import (
     build_question_prompt,
     build_evaluation_prompt,
     build_resume_question_prompt,
+    build_follow_up_prompt,
 )
 
 interview_bp = Blueprint("interview", __name__)
@@ -198,6 +199,64 @@ def evaluate_answer_helper(question, answer, domain="DSA", difficulty="Medium", 
         "strengths": strengths,
         "improvements": improvements,
     }
+
+
+@interview_bp.route("/follow-up", methods=["POST"])
+def check_follow_up():
+    """
+    POST /api/interview/follow-up
+    Determine if a follow-up question is warranted for the given Q&A.
+    Body:
+    {
+      "question": "...",
+      "answer": "...",
+      "domain": "DSA",
+      "difficulty": "Medium",
+      "jobDescription": "..."
+    }
+    Returns: {"followUp": "..."} or {"followUp": null}
+    """
+    data = request.get_json() or {}
+    question = (data.get("question") or "").strip()
+    answer = (data.get("answer") or "").strip()
+    domain = data.get("domain", "DSA")
+    difficulty = data.get("difficulty", "Medium")
+    raw_jd = data.get("jobDescription") or data.get("job_description") or ""
+
+    # Silently return null if answer is too short (< 15 words) or empty
+    words = [w for w in answer.split() if w]
+    if not question or len(words) < 15:
+        return jsonify({"followUp": None}), 200
+
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key or api_key.startswith("your_"):
+        return jsonify({"followUp": None}), 200
+
+    try:
+        prompt = build_follow_up_prompt(
+            question=question,
+            answer=answer,
+            domain=domain,
+            difficulty=difficulty,
+            job_description=str(raw_jd).strip()[:3000] if raw_jd else "",
+        )
+
+        response = generate_content_with_fallback(prompt)
+        text = response.text.strip()
+        cleaned = re.sub(r"^```(?:json)?\s*", "", text, flags=re.MULTILINE)
+        cleaned = re.sub(r"\s*```$", "", cleaned, flags=re.MULTILINE).strip()
+        parsed = json.loads(cleaned)
+
+        follow_up = None
+        if isinstance(parsed, dict):
+            val = parsed.get("followUp")
+            if val and isinstance(val, str) and val.strip():
+                follow_up = val.strip()
+
+        return jsonify({"followUp": follow_up}), 200
+    except Exception as err:
+        print(f"[Gemini Follow-up] Silently continuing without follow-up: {err}")
+        return jsonify({"followUp": None}), 200
 
 
 @interview_bp.route("/evaluate", methods=["POST"])
