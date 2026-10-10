@@ -289,9 +289,11 @@ def create_app():
     # Register blueprints
     from routes.interview import interview_bp, resume_upload
     from routes.report import report_bp
+    from routes.demo import demo_bp
 
     app.register_blueprint(interview_bp, url_prefix="/api/interview")
     app.register_blueprint(report_bp, url_prefix="/api/report")
+    app.register_blueprint(demo_bp, url_prefix="/api/demo")
 
     # Direct endpoint for resume extraction: POST /api/resume/extract
     app.add_url_rule("/api/resume/extract", view_func=resume_upload, methods=["POST"])

@@ -22,6 +22,7 @@
 - ⚡ **Instant Feedback and Scoring** — Receive comprehensive evaluations, constructive feedback, scoring, and ideal answers immediately after answering.
 - 📊 **Speaking Analytics** — Real-time pacing insights (Words Per Minute) and filler word detection ("um", "uh", "like", "you know", etc.) for voice answers with actionable delivery verdicts.
 - 🔁 **Compare with Previous Attempt** — Benchmark performance against your earlier attempt in the same domain with overall score changes, category radar deltas, pace shifts, and improvement indicators.
+- 💡 **Try a Demo Question Without Signing Up** — Test an instant AI-generated question across Software Engineering, Data/ML, or Behavioral roles with real-time feedback and scoring.
 - 📈 **Progress Tracking** — Track past interview sessions, category performance trends, and key strengths and improvement areas over time.
 - 🌓 **Dark & Light Mode** — Seamless theme toggle with a responsive interface designed for desktop and mobile viewports.
 
@@ -89,6 +90,7 @@ python app.py
 #### Backend (`backend/.env`)
 - `GEMINI_API_KEY`
 - `FRONTEND_URL`
+- `DEMO_DAILY_LIMIT`
 
 ---
 
@@ -97,6 +99,8 @@ python app.py
 | Method | Endpoint | Description |
 |---|---|---|
 | GET | `/api/health` | Health check |
+| POST | `/api/demo/question` | Generate a single demo question without login |
+| POST | `/api/demo/evaluate` | Evaluate a demo answer without login |
 | POST | `/api/generate-questions` | Generate interview questions |
 | POST | `/api/interview/start` | Start a new interview session |
 | POST | `/api/interview/next` | Evaluate answer + get next question |

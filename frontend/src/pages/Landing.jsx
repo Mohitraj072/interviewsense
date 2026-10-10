@@ -1,12 +1,14 @@
 import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
-import { motion, useInView, useScroll, useTransform } from 'framer-motion'
+import { motion, useInView, useScroll, useTransform, AnimatePresence } from 'framer-motion'
 import {
   Mic, Brain, FileText, BarChart3, Shield, Zap, ArrowRight,
   ChevronRight, Play, CheckCircle, Trophy, TrendingUp,
   Cpu, Target, Github, Twitter, Linkedin,
-  Sparkles, Clock, Globe
+  Sparkles, Clock, Globe, X, RefreshCw, Loader2,
+  CheckCircle2, AlertCircle, BookOpen, Send
 } from 'lucide-react'
+import axios from 'axios'
 import ThemeToggle from '../components/ThemeToggle'
 
 // ─── Animation Variants ───────────────────────────────────────────────────────
@@ -156,7 +158,7 @@ function Navbar() {
 }
 
 // ─── Hero Section ─────────────────────────────────────────────────────────────
-function Hero() {
+function Hero({ onOpenDemo }) {
   return (
     <section className="relative min-h-screen flex flex-col items-center justify-center overflow-hidden pt-16">
       {/* Background */}
@@ -248,13 +250,13 @@ function Hero() {
               <ArrowRight className="w-4 h-4 flex-shrink-0" />
             </Link>
             <button
-              id="hero-watch-demo"
-              className="btn-secondary w-full sm:w-auto px-5 sm:px-6 py-3.5 text-sm sm:text-base sm:whitespace-nowrap flex items-center justify-center gap-3"
+              id="hero-try-demo"
+              type="button"
+              onClick={onOpenDemo}
+              className="btn-secondary w-full sm:w-auto px-5 sm:px-6 py-3.5 text-sm sm:text-base sm:whitespace-nowrap flex items-center justify-center gap-2.5 cursor-pointer hover:border-brand-indigo/50 transition-all"
             >
-              <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(99,102,241,0.15)' }}>
-                <Play className="w-3 h-3 text-brand-indigo fill-brand-indigo" />
-              </div>
-              Watch Demo
+              <Sparkles className="w-4 h-4 text-brand-indigo flex-shrink-0" />
+              <span>Try a demo</span>
             </button>
           </motion.div>
 
@@ -870,8 +872,344 @@ function Footer() {
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000'
 
+// ─── Demo Question Modal (No Signup Required) ────────────────────────────────
+function DemoQuestionModal({ isOpen, onClose }) {
+  const [role, setRole] = useState('Software Engineer')
+  const [question, setQuestion] = useState('')
+  const [loadingQuestion, setLoadingQuestion] = useState(false)
+  const [answer, setAnswer] = useState('')
+  const [evaluating, setEvaluating] = useState(false)
+  const [result, setResult] = useState(null)
+  const [error, setError] = useState(null)
+
+  const roles = [
+    { id: 'Software Engineer', label: 'Software Engineer', icon: Cpu },
+    { id: 'Data/ML', label: 'Data / ML', icon: Brain },
+    { id: 'HR/Behavioral', label: 'HR / Behavioral', icon: Target },
+  ]
+
+  const fetchQuestion = async (targetRole) => {
+    setLoadingQuestion(true)
+    setError(null)
+    setResult(null)
+    setAnswer('')
+    try {
+      const res = await axios.post(`${API_BASE}/api/demo/question`, { role: targetRole })
+      if (res.data?.question) {
+        setQuestion(res.data.question)
+      } else {
+        throw new Error('Could not load question.')
+      }
+    } catch (err) {
+      const msg = err.response?.data?.error || 'Unable to generate demo question. Please try again.'
+      setError(msg)
+    } finally {
+      setLoadingQuestion(false)
+    }
+  }
+
+  // Load question when modal opens if empty
+  useEffect(() => {
+    if (isOpen && !question && !loadingQuestion) {
+      fetchQuestion(role)
+    }
+  }, [isOpen])
+
+  if (!isOpen) return null
+
+  const handleRoleChange = (newRole) => {
+    if (newRole === role && question) return
+    setRole(newRole)
+    fetchQuestion(newRole)
+  }
+
+  const handleSubmit = async (e) => {
+    e?.preventDefault()
+    if (!answer.trim() || evaluating) return
+    setEvaluating(true)
+    setError(null)
+    try {
+      const res = await axios.post(`${API_BASE}/api/demo/evaluate`, {
+        role,
+        question,
+        answer: answer.trim().slice(0, 600),
+      })
+      if (res.data && typeof res.data.score === 'number') {
+        setResult(res.data)
+      } else {
+        throw new Error('Invalid evaluation format.')
+      }
+    } catch (err) {
+      const msg = err.response?.data?.error || 'Evaluation is temporarily unavailable. Please try again or sign up for full interviews.'
+      setError(msg)
+    } finally {
+      setEvaluating(false)
+    }
+  }
+
+  const handleResetForNewQuestion = () => {
+    fetchQuestion(role)
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 15 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 15 }}
+        className="glass-card w-full max-w-xl rounded-2xl p-4 sm:p-7 relative border border-surface-border shadow-2xl space-y-5 my-auto max-h-[92vh] overflow-y-auto"
+        style={{
+          background: 'var(--card-bg)',
+          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 0 1px var(--card-border)',
+        }}
+      >
+        {/* Close Button */}
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close demo"
+          className="absolute top-3.5 right-3.5 p-2 rounded-xl text-text-muted hover:text-text-primary hover:bg-surface transition-colors cursor-pointer"
+        >
+          <X className="w-5 h-5" />
+        </button>
+
+        {/* Modal Header */}
+        <div className="space-y-1.5 pr-8">
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-brand-indigo/15 text-brand-indigo border border-brand-indigo/30">
+            <Sparkles className="w-3 h-3" />
+            <span>Instant Demo · No sign-up required</span>
+          </div>
+          <h2 className="text-lg sm:text-xl font-bold text-text-primary font-heading tracking-tight">
+            Try an AI Mock Interview Question
+          </h2>
+          <p className="text-xs text-text-secondary leading-relaxed">
+            Pick a role, answer the question below in text mode, and get instant feedback and scoring powered by Gemini.
+          </p>
+        </div>
+
+        {/* Role Selector */}
+        <div>
+          <label className="text-xs font-semibold text-text-primary block mb-2">
+            Select Role Track:
+          </label>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            {roles.map((r) => {
+              const isSelected = role === r.id
+              return (
+                <button
+                  key={r.id}
+                  type="button"
+                  disabled={loadingQuestion || evaluating}
+                  onClick={() => handleRoleChange(r.id)}
+                  className={`py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                    isSelected
+                      ? 'bg-brand-indigo/20 text-brand-indigo border border-brand-indigo/50 shadow-sm'
+                      : 'bg-surface/60 text-text-secondary border border-surface-border hover:border-surface-border/80 hover:text-text-primary'
+                  }`}
+                >
+                  <r.icon className="w-3.5 h-3.5 flex-shrink-0" />
+                  <span>{r.label}</span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Question Display */}
+        {loadingQuestion ? (
+          <div className="p-4 rounded-xl bg-surface/50 border border-surface-border flex items-center gap-3 text-xs text-text-muted">
+            <Loader2 className="w-4 h-4 animate-spin text-brand-indigo flex-shrink-0" />
+            <span>Generating tailored {role} question with Gemini…</span>
+          </div>
+        ) : question ? (
+          <div className="p-4 rounded-xl bg-surface/70 border border-surface-border relative">
+            <div className="flex items-start justify-between gap-3 mb-1.5">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-brand-indigo">
+                {role} Question
+              </span>
+              <button
+                type="button"
+                onClick={handleResetForNewQuestion}
+                disabled={loadingQuestion || evaluating}
+                className="text-[11px] text-text-muted hover:text-brand-indigo flex items-center gap-1 cursor-pointer transition-colors"
+                title="Get a different question"
+              >
+                <RefreshCw className="w-3 h-3" />
+                <span>New Question</span>
+              </button>
+            </div>
+            <p className="text-xs sm:text-sm font-semibold text-text-primary leading-relaxed">
+              {question}
+            </p>
+          </div>
+        ) : null}
+
+        {/* Answer Form & Submission (Shown when no result yet) */}
+        {!result ? (
+          <form onSubmit={handleSubmit} className="space-y-3 pt-1">
+            <div>
+              <div className="flex items-center justify-between mb-1.5 text-xs">
+                <label className="font-semibold text-text-primary">
+                  Your Answer <span className="text-text-muted font-normal text-[11px]">(text mode demo)</span>
+                </label>
+                <span
+                  className={`text-[11px] font-mono font-semibold ${
+                    answer.length >= 580
+                      ? 'text-rose-400'
+                      : answer.length >= 500
+                      ? 'text-amber-400'
+                      : 'text-text-muted'
+                  }`}
+                >
+                  {answer.length}/600
+                </span>
+              </div>
+              <textarea
+                value={answer}
+                onChange={(e) => setAnswer(e.target.value.slice(0, 600))}
+                maxLength={600}
+                rows={4}
+                disabled={evaluating || loadingQuestion}
+                placeholder="Type your response here (key concepts, practical explanation, trade-offs)..."
+                className="input-field w-full text-xs sm:text-sm p-3 resize-none leading-relaxed"
+              />
+            </div>
+
+            {error && (
+              <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/25 flex items-start gap-2.5 text-xs text-rose-300">
+                <AlertCircle className="w-4 h-4 text-rose-400 flex-shrink-0 mt-0.5" />
+                <span className="leading-snug">{error}</span>
+              </div>
+            )}
+
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-1">
+              <span className="text-[11px] text-text-muted">
+                No voice mode or login in demo.
+              </span>
+              <button
+                type="submit"
+                disabled={!answer.trim() || evaluating || loadingQuestion}
+                className="btn-primary py-2.5 px-5 text-xs sm:text-sm font-bold justify-center disabled:opacity-50 cursor-pointer"
+              >
+                {evaluating ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin mr-1.5" />
+                    <span>Evaluating answer…</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Submit Answer</span>
+                    <Send className="w-3.5 h-3.5 ml-1.5" />
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
+        ) : (
+          /* Result View */
+          <div className="space-y-4 pt-1">
+            {/* Header label and Score */}
+            <div className="flex items-center justify-between p-3.5 rounded-xl bg-surface/80 border border-surface-border">
+              <div className="space-y-0.5">
+                <span className="text-xs font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-brand-indigo/15 text-brand-indigo border border-brand-indigo/30 inline-block">
+                  Demo evaluation
+                </span>
+                <p className="text-[11px] text-text-muted mt-1">{role} track</p>
+              </div>
+              <div className="flex items-baseline gap-1">
+                <span
+                  className={`text-3xl font-black font-heading ${
+                    result.score >= 75
+                      ? 'text-emerald-400'
+                      : result.score >= 50
+                      ? 'text-amber-400'
+                      : 'text-rose-400'
+                  }`}
+                >
+                  {result.score}
+                </span>
+                <span className="text-xs text-text-muted font-bold">/100</span>
+              </div>
+            </div>
+
+            {/* Strengths & Improvements */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* 2 Strengths */}
+              <div className="p-3.5 rounded-xl bg-surface/70 border border-surface-border space-y-2">
+                <span className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  Strengths
+                </span>
+                <ul className="space-y-1.5 text-xs text-text-secondary">
+                  {result.strengths?.map((s, idx) => (
+                    <li key={idx} className="flex items-start gap-2 leading-relaxed">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 mt-1.5 flex-shrink-0" />
+                      <span>{s}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              {/* 2 Improvements */}
+              <div className="p-3.5 rounded-xl bg-surface/70 border border-surface-border space-y-2">
+                <span className="text-[11px] font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <TrendingUp className="w-3.5 h-3.5" />
+                  Improvements
+                </span>
+                <ul className="space-y-1.5 text-xs text-text-secondary">
+                  {result.improvements?.map((imp, idx) => (
+                    <li key={idx} className="flex items-start gap-2 leading-relaxed">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400 mt-1.5 flex-shrink-0" />
+                      <span>{imp}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+
+            {/* Short Ideal Answer Outline */}
+            {result.idealAnswer && (
+              <div className="p-3.5 rounded-xl bg-surface/60 border border-surface-border space-y-1.5">
+                <span className="text-[11px] font-bold text-text-primary uppercase tracking-wider flex items-center gap-1.5">
+                  <BookOpen className="w-3.5 h-3.5 text-brand-indigo" />
+                  Ideal Answer Outline
+                </span>
+                <p className="text-xs text-text-secondary leading-relaxed">
+                  {result.idealAnswer}
+                </p>
+              </div>
+            )}
+
+            {/* CTA to Login/Sign up for full interview */}
+            <div className="pt-2 space-y-2.5">
+              <Link
+                to="/login"
+                className="btn-primary w-full py-3.5 px-4 text-xs sm:text-sm font-bold text-center justify-center shadow-lg shadow-indigo-500/20"
+              >
+                <span>Sign up to take the full interview with voice, follow-ups and a study plan</span>
+                <ArrowRight className="w-4 h-4 ml-1.5 flex-shrink-0" />
+              </Link>
+
+              <button
+                type="button"
+                onClick={handleResetForNewQuestion}
+                className="w-full py-2 text-xs text-text-muted hover:text-text-primary transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Try another demo question</span>
+              </button>
+            </div>
+          </div>
+        )}
+      </motion.div>
+    </div>
+  )
+}
+
 // ─── Main Landing Page ────────────────────────────────────────────────────────
 export default function Landing() {
+  const [showDemoModal, setShowDemoModal] = useState(false)
+
   useEffect(() => {
     // Silently ping /health so Render's free-tier instance wakes up early before user starts an interview
     const pingHealth = async () => {
@@ -891,13 +1229,17 @@ export default function Landing() {
   return (
     <div className="bg-bg-primary min-h-screen">
       <Navbar />
-      <Hero />
+      <Hero onOpenDemo={() => setShowDemoModal(true)} />
       <StatsBar />
       <Features />
       <HowItWorks />
       <WhyInterviewSense />
       <CTABanner />
       <Footer />
+      <DemoQuestionModal
+        isOpen={showDemoModal}
+        onClose={() => setShowDemoModal(false)}
+      />
     </div>
   )
 }
