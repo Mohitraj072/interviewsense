@@ -18,6 +18,7 @@
 
 - 🎤 **Voice and Text Interviews** — Practice speaking aloud with real-time browser speech recognition or type answers in text mode.
 - 🎯 **Questions Tailored to a Pasted Job Description** — Paste any job description to dynamically generate interview questions tailored to the specific skills, tools, and responsibilities.
+- 🎯 **Targeted practice from your weakest areas** — Automatically analyzes your past interviews to practice your lowest-scoring categories and questions.
 - 📄 **Questions based on your own resume** — Paste your resume during setup to generate targeted questions probing your actual projects, tools, internships, and claims.
 - 🔄 **Adaptive AI Follow-Up Questions** — Dynamically generates context-aware follow-up questions on substantial answers to probe deeper technical depth and implementation trade-offs.
 - ⚡ **Instant Feedback and Scoring** — Receive comprehensive evaluations, constructive feedback, scoring, and ideal answers immediately after answering.

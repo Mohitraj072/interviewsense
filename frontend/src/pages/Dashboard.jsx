@@ -14,6 +14,7 @@ import { useAuth } from '../context/AuthContext'
 import { db } from '../firebase'
 import ProfileSetup from '../components/ProfileSetup'
 import ThemeToggle from '../components/ThemeToggle'
+import WeakSpotsCard from '../components/WeakSpotsCard'
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000'
 
@@ -1158,6 +1159,11 @@ export default function Dashboard() {
             className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             {stats.map((s) => <StatCard key={s.label} {...s} />)}
           </motion.div>
+
+          {/* Practice my weak spots card */}
+          <div className="mb-6">
+            <WeakSpotsCard onStartNewInterview={() => setShowNewInterview(true)} />
+          </div>
 
           {/* Main grid */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

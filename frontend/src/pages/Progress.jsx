@@ -11,6 +11,7 @@ import { db } from '../firebase'
 import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
 import ThemeToggle from '../components/ThemeToggle'
+import WeakSpotsCard from '../components/WeakSpotsCard'
 import { NewInterviewModal } from './Dashboard'
 
 import {
@@ -680,6 +681,9 @@ export default function Progress() {
               )
             })}
           </motion.div>
+
+          {/* Weak Spots Practice Card */}
+          <WeakSpotsCard onStartNewInterview={() => setShowNewInterview(true)} />
 
           {loading ? (
             <div

@@ -1019,6 +1019,7 @@ export default function Report() {
           ...(finalReport || {}),
           overall_score: overallScore,
           overall_verdict: overallVerdict,
+          type: config?.type || 'Technical',
           summary: !hasAnswered
             ? 'No answers were provided during this session to evaluate.'
             : (finalReport?.summary ||
@@ -1167,6 +1168,9 @@ export default function Report() {
             setReportData({
               overall_score: avgScore,
               overall_verdict: verdict,
+              type: data.type || 'Technical',
+              domain: data.domain || 'Technical',
+              difficulty: data.difficulty || 'Medium',
               summary: data.summary || `Performance record for ${data.domain || 'Technical'} mock interview (${data.difficulty || 'Medium'}).`,
               skill_radar: data.radarScores || {
                 technical_accuracy: Math.min(95, avgScore + 2),
@@ -1513,6 +1517,12 @@ export default function Report() {
             <span className="text-xs text-text-muted">
               {sessionMeta?.config?.difficulty || 'Medium'} difficulty
             </span>
+            {(sessionMeta?.config?.type === 'Weak-spot practice' || reportData?.type === 'Weak-spot practice') && (
+              <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/25 text-amber-400 flex items-center gap-1.5">
+                <Target className="w-3.5 h-3.5" />
+                Weak-spot practice
+              </span>
+            )}
             {(sessionMeta?.config?.jobTitle || reportData?.jobTitle) && (
               <span
                 className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-indigo-500/10 border border-indigo-500/25 text-indigo-400 flex items-center gap-1.5 max-w-[200px] truncate"
@@ -1581,8 +1591,15 @@ export default function Report() {
               <div className="flex flex-col lg:flex-row items-center gap-8 justify-between">
                 {/* Left: Summary text */}
                 <div className="flex-1 space-y-3 text-center lg:text-left">
-                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-brand-indigo/10 border border-brand-indigo/30 text-brand-indigo">
-                    <Sparkles className="w-3.5 h-3.5" /> Interview Performance Report
+                  <div className="flex items-center justify-center lg:justify-start gap-2 flex-wrap">
+                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-brand-indigo/10 border border-brand-indigo/30 text-brand-indigo">
+                      <Sparkles className="w-3.5 h-3.5" /> Interview Performance Report
+                    </div>
+                    {(sessionMeta?.config?.type === 'Weak-spot practice' || reportData?.type === 'Weak-spot practice') && (
+                      <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/15 border border-amber-500/30 text-amber-400">
+                        <Target className="w-3.5 h-3.5" /> Weak-spot practice
+                      </div>
+                    )}
                   </div>
                   <h1 className="text-2xl sm:text-3xl font-extrabold text-text-primary tracking-tight font-heading">
                     Assessment Verdict:{' '}

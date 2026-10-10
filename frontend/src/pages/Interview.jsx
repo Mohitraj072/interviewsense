@@ -351,6 +351,9 @@ export default function Interview() {
   const [isDragging, setIsDragging] = useState(false)
   const fileInputRef = useRef(null)
 
+  // Weak-spot practice states
+  const [weakSpots, setWeakSpots] = useState(incomingState?.weakSpots || null)
+
   // Support pre-configured state from Dashboard navigation
   useEffect(() => {
     if (incomingState) {
@@ -381,6 +384,7 @@ export default function Interview() {
         setStage('interview')
       } else {
         if (incomingState.type) setInterviewType(incomingState.type)
+        if (incomingState.weakSpots) setWeakSpots(incomingState.weakSpots)
         if (incomingState.domain) setSelectedDomain(incomingState.domain)
         if (incomingState.difficulty) setDifficulty(incomingState.difficulty)
         if (incomingState.isResumeBased) setIsResumeActive(true)
@@ -402,12 +406,13 @@ export default function Interview() {
         }
         if (incomingState.autoStart) {
           handleStartInterview({
-            type: incomingState.type || 'Technical',
+            type: incomingState.type || (incomingState.weakSpots ? 'Weak-spot practice' : 'Technical'),
             domain: incomingState.domain || 'DSA',
             difficulty: incomingState.difficulty || 'Medium',
             timePerQuestion: incomingTime !== undefined ? incomingTime : 120,
             jobDescription: incomingState.jobDescription || '',
             resumeText: incomingState.resumeText || '',
+            weakSpots: incomingState.weakSpots || null,
           })
         }
       }
@@ -661,15 +666,26 @@ export default function Interview() {
 
     // Scenario 2: Standard, JD-tailored, or Resume-text question generation
     setIsResumeActive(Boolean(activeResumeText))
+    const activeWeakSpots = overrideParams?.weakSpots || weakSpots || null
+    if (activeWeakSpots) {
+      setWeakSpots(activeWeakSpots)
+      setInterviewType('Weak-spot practice')
+    }
+
     try {
-      const response = await axios.post(`${API_BASE}/api/generate-questions`, {
-        type: useType,
+      const requestPayload = {
+        type: activeWeakSpots ? 'Weak-spot practice' : useType,
         domain: useDomain,
         difficulty: useDifficulty,
         count: useCount,
         jobDescription: activeJd,
         resumeText: activeResumeText,
-      })
+      }
+      if (activeWeakSpots) {
+        requestPayload.weakSpots = activeWeakSpots
+      }
+
+      const response = await axios.post(`${API_BASE}/api/generate-questions`, requestPayload)
 
       const fetchedList = Array.isArray(response.data)
         ? response.data
@@ -814,7 +830,7 @@ export default function Interview() {
           qaHistory,
           resumeSummary, // In-memory session summary for evaluation
           config: {
-            type: isResumeActive ? 'Resume-Based' : interviewType,
+            type: isResumeActive ? 'Resume-Based' : (weakSpots || interviewType === 'Weak-spot practice' ? 'Weak-spot practice' : interviewType),
             domain: selectedDomain,
             difficulty,
             count: questions.length,
@@ -1452,6 +1468,8 @@ export default function Interview() {
                     <span>
                       {isServerWaking
                         ? 'Waking up the interview server... this can take up to a minute on first visit'
+                        : weakSpots || interviewType === 'Weak-spot practice'
+                        ? 'Generating Targeted Weak-Spot Questions...'
                         : isResumeActive || resumeText.trim()
                         ? 'Generating Resume-Based Questions...'
                         : jobDescription.trim()
@@ -1462,7 +1480,9 @@ export default function Interview() {
                 ) : (
                   <div className="flex items-center gap-2">
                     <span>
-                      {isResumeActive || resumeText.trim()
+                      {weakSpots || interviewType === 'Weak-spot practice'
+                        ? 'Start Focused Weak-Spot Practice'
+                        : isResumeActive || resumeText.trim()
                         ? 'Start Resume-Based Interview Session'
                         : jobDescription.trim()
                         ? 'Start Role-Tailored Interview Session'
@@ -1555,6 +1575,12 @@ export default function Interview() {
                 Resume-based
               </span>
             )}
+            {(interviewType === 'Weak-spot practice' || Boolean(weakSpots)) && (
+              <span className="inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 shadow-sm shadow-amber-500/20">
+                <Target className="w-3.5 h-3.5" />
+                Weak-spot practice
+              </span>
+            )}
           </div>
         </div>
 
@@ -1598,6 +1624,11 @@ export default function Interview() {
               <span className="flex items-center gap-1.5 uppercase tracking-wider text-[11px] text-emerald-400 font-bold">
                 <Sparkles className="w-3.5 h-3.5" />
                 Resume-Personalized Question {currentIndex + 1}
+              </span>
+            ) : interviewType === 'Weak-spot practice' || Boolean(weakSpots) ? (
+              <span className="flex items-center gap-1.5 uppercase tracking-wider text-[11px] text-amber-400 font-bold">
+                <Target className="w-3.5 h-3.5" />
+                Weak-Spot Practice Question {currentIndex + 1}
               </span>
             ) : (
               <span className="flex items-center gap-1.5 uppercase tracking-wider text-[11px] text-[#6366F1]">
