@@ -76,6 +76,8 @@ def generate_report():
     interview_type = data.get("interviewType", "Technical")
     qa_pairs = data.get("qa_pairs", [])
     session_id = data.get("sessionId", f"sess_{os.urandom(6).hex()}")
+    resume_summary = data.get("resumeSummary") or data.get("resume_summary") or ""
+    sanitized_resume_summary = str(resume_summary).strip()[:2000] if resume_summary else ""
 
     try:
         api_key = os.getenv("GEMINI_API_KEY")
@@ -87,6 +89,7 @@ def generate_report():
             difficulty=difficulty,
             interview_type=interview_type,
             qa_pairs=qa_pairs,
+            resume_summary=sanitized_resume_summary,
         )
 
         response = generate_content_with_fallback(prompt)
@@ -125,6 +128,7 @@ def generate_report():
                 "inputMode": pair.get("inputMode", "text"),
                 "duration": pair.get("duration", 0),
                 "tooShort": bool(pair.get("tooShort")),
+                "isResumeBased": bool(pair.get("isResumeBased") or pair.get("resumeBased")),
             }
 
             if pair.get("followUpQuestion"):

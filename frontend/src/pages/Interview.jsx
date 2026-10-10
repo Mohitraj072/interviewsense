@@ -28,6 +28,7 @@ import {
   Trash2,
   RefreshCw,
   Briefcase,
+  ShieldCheck,
 } from 'lucide-react'
 import axios from 'axios'
 import { useAuth } from '../context/AuthContext'
@@ -343,6 +344,8 @@ export default function Interview() {
   const [hasJobDescription, setHasJobDescription] = useState(false)
 
   // Resume-based states
+  const [resumeText, setResumeText] = useState('')
+  const [resumeSummary, setResumeSummary] = useState('')
   const [resumeFile, setResumeFile] = useState(null)
   const [isResumeActive, setIsResumeActive] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
@@ -352,9 +355,15 @@ export default function Interview() {
   useEffect(() => {
     if (incomingState) {
       if (incomingState.customQuestions && incomingState.customQuestions.length > 0) {
-        const qList = incomingState.customQuestions.map((q) =>
-          typeof q === 'string' ? q : q.question || JSON.stringify(q)
-        )
+        const qList = incomingState.customQuestions.map((q) => {
+          if (typeof q === 'string') {
+            return { question: q, isResumeBased: Boolean(incomingState.isResumeBased || incomingState.type === 'Resume-Based') }
+          }
+          return {
+            question: q.question || JSON.stringify(q),
+            isResumeBased: Boolean(q.isResumeBased ?? (incomingState.isResumeBased || incomingState.type === 'Resume-Based')),
+          }
+        })
         setQuestions(qList)
         setIsResumeActive(Boolean(incomingState.isResumeBased || incomingState.type === 'Resume-Based'))
         setInterviewType(incomingState.type || 'Technical')
@@ -375,6 +384,10 @@ export default function Interview() {
         if (incomingState.domain) setSelectedDomain(incomingState.domain)
         if (incomingState.difficulty) setDifficulty(incomingState.difficulty)
         if (incomingState.isResumeBased) setIsResumeActive(true)
+        if (incomingState.resumeText) {
+          setResumeText(incomingState.resumeText.slice(0, 6000))
+          setIsResumeActive(true)
+        }
         if (incomingState.jobDescription) {
           setJobDescription(incomingState.jobDescription.slice(0, 4000))
           setHasJobDescription(true)
@@ -394,6 +407,7 @@ export default function Interview() {
             difficulty: incomingState.difficulty || 'Medium',
             timePerQuestion: incomingTime !== undefined ? incomingTime : 120,
             jobDescription: incomingState.jobDescription || '',
+            resumeText: incomingState.resumeText || '',
           })
         }
       }
@@ -579,8 +593,11 @@ export default function Interview() {
     const useCount = overrideParams?.count || questionCount
     const useTime = overrideParams?.timePerQuestion !== undefined ? overrideParams.timePerQuestion : timePerQuestion
 
-    // Scenario 1: Resume uploaded -> send PDF to POST /api/resume/extract
-    if (resumeFile && !overrideParams) {
+    const activeResumeText = (overrideParams?.resumeText !== undefined ? overrideParams.resumeText : resumeText)?.trim() || ''
+    const activeJd = (overrideParams?.jobDescription !== undefined ? overrideParams.jobDescription : jobDescription)?.trim() || ''
+
+    // Scenario 1: Resume uploaded via PDF file when no pasted resume text is provided
+    if (resumeFile && !overrideParams && !activeResumeText) {
       try {
         const formData = new FormData()
         formData.append('resume', resumeFile)
@@ -597,13 +614,20 @@ export default function Interview() {
           ? response.data
           : response.data?.questions || []
 
-        const cleanList = rawQuestions.map((q) =>
-          typeof q === 'string' ? q : q.question || JSON.stringify(q)
-        )
+        const cleanList = rawQuestions.map((q) => {
+          if (typeof q === 'string') {
+            return { question: q, isResumeBased: true }
+          }
+          return {
+            question: q.question || String(q),
+            isResumeBased: Boolean(q.isResumeBased ?? true),
+          }
+        })
 
         if (cleanList.length > 0) {
           setQuestions(cleanList)
           setIsResumeActive(true)
+          setResumeSummary('')
           setCurrentIndex(0)
           setAnswers([])
           setTimerSeconds(0)
@@ -635,9 +659,8 @@ export default function Interview() {
       return
     }
 
-    // Scenario 2: Normal flow when no resume is uploaded
-    setIsResumeActive(false)
-    const activeJd = (overrideParams?.jobDescription !== undefined ? overrideParams.jobDescription : jobDescription)?.trim() || ''
+    // Scenario 2: Standard, JD-tailored, or Resume-text question generation
+    setIsResumeActive(Boolean(activeResumeText))
     try {
       const response = await axios.post(`${API_BASE}/api/generate-questions`, {
         type: useType,
@@ -645,19 +668,31 @@ export default function Interview() {
         difficulty: useDifficulty,
         count: useCount,
         jobDescription: activeJd,
+        resumeText: activeResumeText,
       })
 
       const fetchedList = Array.isArray(response.data)
         ? response.data
         : response.data?.questions || []
 
-      const cleanList = fetchedList.map((q) =>
-        typeof q === 'string' ? q : q.question || JSON.stringify(q)
-      )
+      const cleanList = fetchedList.map((q) => {
+        if (typeof q === 'string') {
+          return { question: q, isResumeBased: Boolean(activeResumeText) }
+        }
+        return {
+          question: q.question || String(q),
+          isResumeBased: Boolean(q.isResumeBased || (activeResumeText && q.isResumeBased !== false)),
+        }
+      })
 
       if (cleanList.length > 0) {
         setQuestions(cleanList)
-        setIsResumeActive(false)
+        setIsResumeActive(Boolean(response.data?.hasResume || activeResumeText))
+        if (response.data?.resumeSummary) {
+          setResumeSummary(response.data.resumeSummary)
+        } else {
+          setResumeSummary('')
+        }
         if (response.data?.jobTitle) {
           setJobTitle(response.data.jobTitle)
         }
@@ -702,10 +737,11 @@ export default function Interview() {
       `Walk me through a real-world scenario where you had to solve a complex ${selectedDomain} challenge.`,
       `What are the critical trade-offs between speed, scalability, and memory consumption in ${selectedDomain}?`,
       `Describe the industry best practices for testing, monitoring, and debugging in ${selectedDomain}.`,
-    ].slice(0, questionCount)
+    ].slice(0, questionCount).map((q) => ({ question: q, isResumeBased: false }))
 
     setQuestions(defaultQuestions)
     setIsResumeActive(false)
+    setResumeSummary('')
     setCurrentIndex(0)
     setAnswers([])
     setTimerSeconds(0)
@@ -751,6 +787,7 @@ export default function Interview() {
           duration: item.duration,
           inputMode: item.inputMode,
           tooShort: Boolean(item.tooShort),
+          isResumeBased: Boolean(item.isResumeBased),
         }
         if (item.followUpQuestion) {
           qaItem.followUpQuestion = item.followUpQuestion
@@ -775,12 +812,14 @@ export default function Interview() {
       navigate('/report', {
         state: {
           qaHistory,
+          resumeSummary, // In-memory session summary for evaluation
           config: {
             type: isResumeActive ? 'Resume-Based' : interviewType,
             domain: selectedDomain,
             difficulty,
             count: questions.length,
             isResumeBased: isResumeActive,
+            hasResume: isResumeActive,
             hasJobDescription: Boolean(jobDescription.trim() || hasJobDescription),
             jobTitle: (jobTitle || '').slice(0, 60),
           },
@@ -807,10 +846,14 @@ export default function Interview() {
 
     const followUpAnswer = skipped ? '' : transcript.trim()
     const followUpDuration = Math.round((Date.now() - questionStartTime) / 1000)
+    const currentQ = questions[currentIndex]
+    const currentQText = typeof currentQ === 'string' ? currentQ : currentQ?.question || ''
+    const currentIsResume = Boolean(typeof currentQ === 'object' && currentQ?.isResumeBased)
 
     const answerRecord = {
       questionIndex: currentIndex,
-      questionText: questions[currentIndex],
+      questionText: currentQText,
+      isResumeBased: currentIsResume,
       answer: activeFollowUp.mainAnswer,
       skipped: false,
       duration: (activeFollowUp.mainDuration || 0) + followUpDuration,
@@ -847,6 +890,9 @@ export default function Interview() {
 
     const finalAnswer = skipped ? '' : transcript.trim()
     const questionDuration = Math.round((Date.now() - questionStartTime) / 1000)
+    const currentQ = questions[currentIndex]
+    const currentQText = typeof currentQ === 'string' ? currentQ : currentQ?.question || ''
+    const currentIsResume = Boolean(typeof currentQ === 'object' && currentQ?.isResumeBased)
 
     // Compute speaking analytics ONLY for voice-mode answers that are not skipped
     const analytics =
@@ -856,7 +902,8 @@ export default function Interview() {
 
     const answerRecord = {
       questionIndex: currentIndex,
-      questionText: questions[currentIndex],
+      questionText: currentQText,
+      isResumeBased: currentIsResume,
       answer: finalAnswer,
       skipped,
       duration: questionDuration,
@@ -888,7 +935,7 @@ export default function Interview() {
         const response = await axios.post(
           `${API_BASE}/api/interview/follow-up`,
           {
-            question: questions[currentIndex],
+            question: currentQText,
             answer: finalAnswer,
             domain: selectedDomain,
             difficulty,
@@ -1038,170 +1085,148 @@ export default function Interview() {
 
           {/* Options Container */}
           <div className="space-y-8">
-            {/* Upload Resume (Optional) Section */}
-            <div
-              className="p-6 rounded-2xl transition-all duration-200"
-              style={{
-                background: 'var(--card-bg)',
-                border: resumeFile ? '1.5px solid rgba(99, 102, 241, 0.5)' : '1px solid var(--card-border)',
-                boxShadow: resumeFile ? '0 0 25px rgba(99, 102, 241, 0.12)' : 'var(--card-shadow)',
-              }}
-            >
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <label className="text-xs font-bold text-[#94A3B8] uppercase tracking-wider">
-                    Upload Resume (Optional)
-                  </label>
-                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-[#94A3B8]">
-                    PDF Only
-                  </span>
-                </div>
-                {resumeFile ? (
-                  <span className="text-[11px] text-emerald-400 font-semibold flex items-center gap-1 bg-emerald-500/10 border border-emerald-500/30 px-2.5 py-0.5 rounded-full">
-                    <CheckCircle2 className="w-3.5 h-3.5" /> Resume Uploaded
-                  </span>
-                ) : (
-                  <span className="text-[11px] text-indigo-400 font-medium flex items-center gap-1">
-                    <Sparkles className="w-3.5 h-3.5" /> Generates Questions from Projects & Skills
-                  </span>
-                )}
-              </div>
-
-              {/* Hidden file input */}
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".pdf"
-                onChange={handleResumeFileChange}
-                className="hidden"
-              />
-
-              {/* Drag & drop zone OR file uploaded state */}
-              {resumeFile ? (
-                <div className="p-4 rounded-xl bg-indigo-500/5 border border-indigo-500/20 flex flex-col sm:flex-row items-center justify-between gap-4">
-                  <div className="flex items-center gap-3.5 w-full sm:w-auto">
-                    <div className="w-11 h-11 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center flex-shrink-0">
-                      <FileText className="w-6 h-6" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="font-bold text-sm text-[#F8F8FF] truncate max-w-xs sm:max-w-md">
-                        {resumeFile.name}
-                      </div>
-                      <div className="text-xs text-[#94A3B8] flex items-center gap-2 mt-0.5 flex-wrap">
-                        <span>{(resumeFile.size / 1024).toFixed(1)} KB</span>
-                        <span>•</span>
-                        <span className="text-emerald-400 font-medium">Ready for PyPDF2 extraction</span>
-                        <span>•</span>
-                        <span className="text-indigo-300">Questions will be personalized</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 w-full sm:w-auto justify-end flex-shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      className="text-xs font-semibold px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-[#94A3B8] hover:text-white transition-colors cursor-pointer"
-                    >
-                      Change File
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleRemoveResume}
-                      className="text-xs font-semibold px-3 py-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 hover:border-red-500/40 text-red-400 hover:text-red-300 transition-colors flex items-center gap-1.5 cursor-pointer"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                      Remove
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div
-                  onDragOver={handleDragOver}
-                  onDragEnter={handleDragOver}
-                  onDragLeave={handleDragLeave}
-                  onDrop={handleDrop}
-                  onClick={() => fileInputRef.current?.click()}
-                  className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all duration-200 flex flex-col items-center justify-center ${
-                    isDragging
-                      ? 'border-indigo-500 bg-indigo-500/15 scale-[1.01]'
-                      : 'border-white/10 hover:border-indigo-500/40 bg-white/[0.01] hover:bg-white/[0.03]'
-                  }`}
-                >
-                  <div className="w-12 h-12 rounded-xl bg-white/5 text-[#94A3B8] flex items-center justify-center mb-3">
-                    <Upload className="w-6 h-6 text-indigo-400" />
-                  </div>
-                  <div className="text-sm font-bold text-[#F8F8FF]">
-                    Drag & drop your resume PDF here, or <span className="text-indigo-400 underline">click to upload</span>
-                  </div>
-                  <p className="text-xs text-[#94A3B8] mt-1.5 max-w-md">
-                    Accepts PDF files only. Gemini AI will analyze your listed projects, technical skills, and work experience to generate personalized interview questions.
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {/* Tailor to a Job Description (Optional) */}
-            <div
-              className="p-4 sm:p-6 rounded-2xl transition-all duration-200"
-              style={{
-                background: 'var(--card-bg)',
-                border: jobDescription.trim() ? '1.5px solid rgba(99, 102, 241, 0.45)' : '1px solid var(--card-border)',
-                boxShadow: jobDescription.trim() ? '0 0 25px rgba(99, 102, 241, 0.12)' : 'var(--card-shadow)',
-              }}
-            >
-              <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-                <label
-                  htmlFor="job-description-input"
-                  className="text-xs font-bold text-[#94A3B8] uppercase tracking-wider flex items-center gap-2 cursor-pointer"
-                >
-                  <Briefcase className="w-3.5 h-3.5 text-indigo-400" />
-                  Paste a job description (optional)
-                </label>
-                <div className="flex items-center gap-3">
-                  {jobDescription.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setJobDescription('')
-                        setJobTitle('')
-                        setHasJobDescription(false)
-                      }}
-                      className="text-[11px] text-text-muted hover:text-red-400 transition-colors cursor-pointer"
-                    >
-                      Clear
-                    </button>
-                  )}
-                  <span
-                    className={`text-[11px] font-mono transition-colors ${
-                      jobDescription.length >= 4000
-                        ? 'text-amber-400 font-bold'
-                        : jobDescription.length > 3500
-                        ? 'text-amber-300'
-                        : 'text-text-muted'
-                    }`}
-                  >
-                    {jobDescription.length} / 4000
-                  </span>
-                </div>
-              </div>
-              <p className="text-xs text-[#94A3B8] mb-3">
-                We'll tailor questions to this role.
-              </p>
-              <textarea
-                id="job-description-input"
-                rows={4}
-                maxLength={4000}
-                value={jobDescription}
-                onChange={(e) => setJobDescription(e.target.value.slice(0, 4000))}
-                placeholder="Paste the role requirements, required skills, tools, or responsibilities from the job posting..."
-                className="w-full text-xs font-normal p-3.5 rounded-xl transition-all resize-y min-h-[96px] max-h-[280px] focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+            {/* Resume & Job Description Inputs (Responsive Grid: side-by-side on desktop, stacked on mobile) */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+              {/* Paste your resume (optional) */}
+              <div
+                className="p-4 sm:p-6 rounded-2xl transition-all duration-200 flex flex-col justify-between"
                 style={{
-                  background: 'rgba(255, 255, 255, 0.03)',
-                  border: '1px solid var(--surface-border)',
-                  color: 'var(--text-primary)',
+                  background: 'var(--card-bg)',
+                  border: resumeText.trim() ? '1.5px solid rgba(99, 102, 241, 0.45)' : '1px solid var(--card-border)',
+                  boxShadow: resumeText.trim() ? '0 0 25px rgba(99, 102, 241, 0.12)' : 'var(--card-shadow)',
                 }}
-              />
+              >
+                <div>
+                  <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                    <label
+                      htmlFor="resume-text-input"
+                      className="text-xs font-bold text-[#94A3B8] uppercase tracking-wider flex items-center gap-2 cursor-pointer"
+                    >
+                      <FileText className="w-3.5 h-3.5 text-indigo-400" />
+                      Paste your resume (optional)
+                    </label>
+                    <div className="flex items-center gap-3">
+                      {resumeText.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setResumeText('')
+                            setIsResumeActive(false)
+                          }}
+                          className="text-[11px] text-text-muted hover:text-red-400 transition-colors cursor-pointer"
+                        >
+                          Clear
+                        </button>
+                      )}
+                      <span
+                        className={`text-[11px] font-mono transition-colors ${
+                          resumeText.length >= 6000
+                            ? 'text-amber-400 font-bold'
+                            : resumeText.length > 5500
+                            ? 'text-amber-300'
+                            : 'text-text-muted'
+                        }`}
+                      >
+                        {resumeText.length} / 6000
+                      </span>
+                    </div>
+                  </div>
+                  <p className="text-xs text-[#94A3B8] mb-3">
+                    We'll generate questions probing your actual projects, tools, internships, and claims.
+                  </p>
+                  <textarea
+                    id="resume-text-input"
+                    rows={5}
+                    maxLength={6000}
+                    value={resumeText}
+                    onChange={(e) => {
+                      const val = e.target.value.slice(0, 6000)
+                      setResumeText(val)
+                      setIsResumeActive(Boolean(val.trim()))
+                    }}
+                    placeholder="Paste your resume content (projects, tools, technical skills, internships, work experience)..."
+                    className="w-full text-xs font-normal p-3.5 rounded-xl transition-all resize-y min-h-[110px] max-h-[280px] focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                    style={{
+                      background: 'rgba(255, 255, 255, 0.03)',
+                      border: '1px solid var(--surface-border)',
+                      color: 'var(--text-primary)',
+                    }}
+                  />
+                </div>
+                <div className="mt-3 pt-2.5 border-t border-surface-border flex items-start sm:items-center gap-2 text-[11px] text-text-muted leading-tight">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0 mt-0.5 sm:mt-0" />
+                  <span>Your resume text is used only to generate questions for this session and is not saved.</span>
+                </div>
+              </div>
+
+              {/* Paste a job description (optional) */}
+              <div
+                className="p-4 sm:p-6 rounded-2xl transition-all duration-200 flex flex-col justify-between"
+                style={{
+                  background: 'var(--card-bg)',
+                  border: jobDescription.trim() ? '1.5px solid rgba(99, 102, 241, 0.45)' : '1px solid var(--card-border)',
+                  boxShadow: jobDescription.trim() ? '0 0 25px rgba(99, 102, 241, 0.12)' : 'var(--card-shadow)',
+                }}
+              >
+                <div>
+                  <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                    <label
+                      htmlFor="job-description-input"
+                      className="text-xs font-bold text-[#94A3B8] uppercase tracking-wider flex items-center gap-2 cursor-pointer"
+                    >
+                      <Briefcase className="w-3.5 h-3.5 text-indigo-400" />
+                      Paste a job description (optional)
+                    </label>
+                    <div className="flex items-center gap-3">
+                      {jobDescription.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setJobDescription('')
+                            setJobTitle('')
+                            setHasJobDescription(false)
+                          }}
+                          className="text-[11px] text-text-muted hover:text-red-400 transition-colors cursor-pointer"
+                        >
+                          Clear
+                        </button>
+                      )}
+                      <span
+                        className={`text-[11px] font-mono transition-colors ${
+                          jobDescription.length >= 4000
+                            ? 'text-amber-400 font-bold'
+                            : jobDescription.length > 3500
+                            ? 'text-amber-300'
+                            : 'text-text-muted'
+                        }`}
+                      >
+                        {jobDescription.length} / 4000
+                      </span>
+                    </div>
+                  </div>
+                  <p className="text-xs text-[#94A3B8] mb-3">
+                    We'll tailor questions to this specific role and requirements.
+                  </p>
+                  <textarea
+                    id="job-description-input"
+                    rows={5}
+                    maxLength={4000}
+                    value={jobDescription}
+                    onChange={(e) => setJobDescription(e.target.value.slice(0, 4000))}
+                    placeholder="Paste role requirements, required skills, tools, or responsibilities from the job posting..."
+                    className="w-full text-xs font-normal p-3.5 rounded-xl transition-all resize-y min-h-[110px] max-h-[280px] focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                    style={{
+                      background: 'rgba(255, 255, 255, 0.03)',
+                      border: '1px solid var(--surface-border)',
+                      color: 'var(--text-primary)',
+                    }}
+                  />
+                </div>
+                <div className="mt-3 pt-2.5 border-t border-surface-border flex items-start sm:items-center gap-2 text-[11px] text-text-muted leading-tight">
+                  <Sparkles className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0 mt-0.5 sm:mt-0" />
+                  <span>Both the resume and the job description can be used together, or either one alone, or neither.</span>
+                </div>
+              </div>
             </div>
 
             {/* 1. Interview Type */}
@@ -1427,8 +1452,8 @@ export default function Interview() {
                     <span>
                       {isServerWaking
                         ? 'Waking up the interview server... this can take up to a minute on first visit'
-                        : resumeFile
-                        ? 'Analyzing Resume & Generating Questions...'
+                        : isResumeActive || resumeText.trim()
+                        ? 'Generating Resume-Based Questions...'
                         : jobDescription.trim()
                         ? 'Tailoring Questions to Job Description...'
                         : 'Generating Questions with Gemini AI...'}
@@ -1437,7 +1462,7 @@ export default function Interview() {
                 ) : (
                   <div className="flex items-center gap-2">
                     <span>
-                      {resumeFile
+                      {isResumeActive || resumeText.trim()
                         ? 'Start Resume-Based Interview Session'
                         : jobDescription.trim()
                         ? 'Start Role-Tailored Interview Session'
@@ -1448,8 +1473,8 @@ export default function Interview() {
                 )}
               </button>
               <p className="text-center text-xs text-[#94A3B8] mt-3">
-                {resumeFile
-                  ? 'Gemini AI will personalize questions based on your resume projects, technical skills, and selected domain.'
+                {resumeText.trim()
+                  ? 'Gemini AI will generate targeted questions based on your resume projects, tools, and claims.'
                   : jobDescription.trim()
                   ? "Questions will be tailored to the role's skills, tools, and responsibilities while respecting your chosen difficulty."
                   : 'Microphone audio will be transcribed in real time. You can review and edit your response before submitting.'}
@@ -1464,7 +1489,9 @@ export default function Interview() {
   // ─────────────────────────────────────────────────────────────────────────────
   // RENDER: LIVE INTERVIEW SCREEN
   // ─────────────────────────────────────────────────────────────────────────────
-  const currentQuestion = questions[currentIndex] || 'Loading question...'
+  const currentQObj = questions[currentIndex]
+  const currentQuestion = (typeof currentQObj === 'object' ? currentQObj?.question : currentQObj) || 'Loading question...'
+  const isCurrentResumeBased = Boolean(typeof currentQObj === 'object' && currentQObj?.isResumeBased)
   const currentWordCount = transcript.trim() ? transcript.trim().split(/\s+/).length : 0
   const currentFillerCount = countFillers(transcript)
 
@@ -1522,7 +1549,7 @@ export default function Interview() {
             <span className="hidden sm:inline-block text-xs font-semibold text-text-secondary">
               {selectedDomain} • {difficulty}
             </span>
-            {isResumeActive && (
+            {(isResumeActive || isCurrentResumeBased) && (
               <span className="inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 shadow-sm shadow-emerald-500/20">
                 <Sparkles className="w-3.5 h-3.5" />
                 Resume-based

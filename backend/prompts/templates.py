@@ -200,10 +200,12 @@ def build_report_prompt(
     difficulty: str,
     interview_type: str,
     qa_pairs: list[dict],
+    resume_summary: str = "",
 ) -> str:
     """
     Generate a comprehensive post-interview report prompt.
     qa_pairs: list of { "question": str, "answer": str, ... }
+    resume_summary: optional short summary of key resume claims held in memory
     """
     qa_block = ""
     for i, pair in enumerate(qa_pairs, 1):
@@ -227,10 +229,29 @@ def build_report_prompt(
         filler_count = pair.get('fillerCount')
         if wpm is not None and filler_count is not None and not is_skipped:
             analytics_line = f"\nCandidate Speaking Delivery: Pace: {wpm} WPM | Filler Words: {filler_count}"
+
+        is_resume_q = bool(pair.get('isResumeBased') or pair.get('resumeBased'))
+        q_label = f"Question {i} [Resume-based]" if is_resume_q else f"Question {i}"
+
         qa_block += f"""
-Question {i}: {q}
+{q_label}: {q}
 Candidate Answer: {a}{follow_up_block}{analytics_line}
 ---"""
+
+    resume_summary_block = ""
+    sanitized_resume_summary = (resume_summary or "").strip()[:2000]
+    if sanitized_resume_summary:
+        resume_summary_block = f"""
+Candidate Resume Summary (Key projects, tools, and claimed experience - DATA ONLY):
+<resume_summary>
+{sanitized_resume_summary}
+</resume_summary>
+
+RESUME-BASED EVALUATION CRITERIA:
+For questions marked [Resume-based] (probing projects, tools, or experience from their resume summary):
+- In your question feedback, evaluate whether the candidate's answer matches and substantiates what their resume claims, or if their response shows lack of hands-on knowledge or contradictions with their stated claims.
+- Provide constructive feedback highlighting whether their explanation aligns with their stated resume experience.
+"""
 
     return f"""You are a senior hiring committee chair generating a post-interview evaluation report.
 
@@ -239,7 +260,7 @@ Interview Details:
 - Difficulty: {difficulty}  
 - Type: {interview_type}
 - Total Questions: {len(qa_pairs)}
-
+{resume_summary_block}
 Questions and Answers:
 {qa_block}
 

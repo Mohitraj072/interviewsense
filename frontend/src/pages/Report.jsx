@@ -931,6 +931,7 @@ export default function Report() {
             interviewType: config?.type || 'Technical',
             fillerCount: fillerCount || 0,
             qa_pairs: qaHistory,
+            resumeSummary: stateData?.resumeSummary || '',
           })
 
           if (res.data?.report && res.data.status !== 'error') {
@@ -975,6 +976,7 @@ export default function Report() {
             improvements: isSkipped ? [] : (pq.improvements || []),
             inputMode,
             tooShort: isTooShort,
+            isResumeBased: Boolean(pq.isResumeBased || hist.isResumeBased),
             duration: hist.duration ?? pq.duration ?? 0,
             followUpQuestion: pq.followUpQuestion || hist.followUpQuestion || null,
             followUpAnswer: pq.followUpAnswer || hist.followUpAnswer || '',
@@ -1080,6 +1082,7 @@ export default function Report() {
                   improvements: q.improvements || [],
                   inputMode: q.inputMode || 'text',
                   tooShort: Boolean(q.tooShort),
+                  isResumeBased: Boolean(q.isResumeBased),
                   followUpQuestion: q.followUpQuestion || null,
                   followUpAnswer: q.followUpAnswer || '',
                   followUpSkipped: Boolean(q.followUpSkipped),
@@ -1102,6 +1105,9 @@ export default function Report() {
             if (config?.hasJobDescription || config?.jobTitle) {
               reportDoc.hasJobDescription = true
               reportDoc.jobTitle = (config?.jobTitle || '').slice(0, 60)
+            }
+            if (config?.hasResume || config?.isResumeBased || stateData?.config?.hasResume || stateData?.config?.isResumeBased) {
+              reportDoc.hasResume = true
             }
             const docRef = await addDoc(collection(db, 'reports'), reportDoc)
             savedReportDocIdRef.current = docRef.id
@@ -1143,6 +1149,7 @@ export default function Report() {
                 improvements: isSkipped ? [] : (q.improvements || []),
                 inputMode: q.inputMode || 'text',
                 tooShort: Boolean(q.tooShort),
+                isResumeBased: Boolean(q.isResumeBased),
                 followUpQuestion: q.followUpQuestion || null,
                 followUpAnswer: q.followUpAnswer || '',
                 followUpSkipped: Boolean(q.followUpSkipped),
@@ -1764,9 +1771,16 @@ export default function Report() {
                         Q{index + 1}
                       </div>
                       <div className="min-w-0">
-                        <p className="text-xs sm:text-sm font-semibold text-text-primary truncate">
-                          {item.question}
-                        </p>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-xs sm:text-sm font-semibold text-text-primary truncate">
+                            {item.question}
+                          </p>
+                          {item.isResumeBased && (
+                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-indigo-500/15 border border-indigo-500/30 text-indigo-400 flex-shrink-0">
+                              Resume-based
+                            </span>
+                          )}
+                        </div>
                         <div className="flex items-center gap-2 mt-0.5">
                           {isSkipped ? (
                             <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-surface border border-surface-border text-text-muted">
