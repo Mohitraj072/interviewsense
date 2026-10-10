@@ -2,6 +2,7 @@
 
 > AI-powered mock interview platform with voice input, Gemini-powered evaluation, and detailed performance analytics.
 
+[![CI](https://github.com/Mohitraj072/interviewsense/actions/workflows/ci.yml/badge.svg)](https://github.com/Mohitraj072/interviewsense/actions/workflows/ci.yml)
 [![Live Demo](https://img.shields.io/badge/Live%20Demo-Visit%20Site-blue?style=for-the-badge)](https://interviewsense-app.vercel.app)
 [![GitHub](https://img.shields.io/badge/GitHub-Repository-black?style=for-the-badge&logo=github)](https://github.com/Mohitraj072/interviewsense)
 
@@ -94,6 +95,26 @@ python app.py
 - `GEMINI_API_KEY`
 - `FRONTEND_URL`
 - `DEMO_DAILY_LIMIT`
+
+---
+
+## 🧪 Testing
+
+Run automated checks locally before submitting changes:
+
+### Frontend Build Check
+```bash
+cd frontend
+npm ci
+npm run build
+```
+
+### Backend Pytest Suite
+```bash
+cd backend
+pip install -r requirements.txt -r requirements-dev.txt
+pytest
+```
 
 ---
 

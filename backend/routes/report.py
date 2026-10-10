@@ -11,6 +11,7 @@ from flask import Blueprint, request, jsonify
 import os
 import google.generativeai as genai
 from prompts.templates import build_report_prompt
+from utils import calculate_overall_score
 
 report_bp = Blueprint("report", __name__)
 
@@ -173,18 +174,10 @@ def generate_report():
         report_data["per_question"] = clean_per_q
 
         # Compute overall score and verdict only from answered questions
-        if answered_scores:
-            avg_score = round(sum(answered_scores) / len(answered_scores))
-            report_data["overall_score"] = avg_score
-            report_data["overall_verdict"] = (
-                "Exceptional" if avg_score >= 85 else
-                "Strong" if avg_score >= 70 else
-                "Average" if avg_score >= 50 else
-                "Needs Work"
-            )
-        else:
-            report_data["overall_score"] = None
-            report_data["overall_verdict"] = "No answers to evaluate"
+        avg_score, verdict = calculate_overall_score(answered_scores)
+        report_data["overall_score"] = avg_score
+        report_data["overall_verdict"] = verdict
+        if not answered_scores:
             report_data["summary"] = "No answers were provided during this session to evaluate."
             report_data["skill_radar"] = {
                 "technical_accuracy": 0,

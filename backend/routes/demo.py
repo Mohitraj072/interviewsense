@@ -20,6 +20,7 @@ import random
 from datetime import datetime, timezone
 from collections import defaultdict
 import google.generativeai as genai
+from utils import sanitize_demo_answer
 
 demo_bp = Blueprint("demo", __name__)
 
@@ -239,7 +240,7 @@ def evaluate_demo_answer():
         return jsonify({"error": "Please provide an answer to evaluate."}), 400
 
     # Enforce 600 character cap
-    answer = raw_answer[:600]
+    answer = sanitize_demo_answer(raw_answer)
 
     # 4. Evaluate with Gemini
     api_key = os.getenv("GEMINI_API_KEY")

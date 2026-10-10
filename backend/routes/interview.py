@@ -20,6 +20,7 @@ from prompts.templates import (
     build_resume_question_prompt,
     build_follow_up_prompt,
 )
+from utils import validate_interviewer_style
 
 interview_bp = Blueprint("interview", __name__)
 
@@ -223,7 +224,7 @@ def check_follow_up():
     difficulty = data.get("difficulty", "Medium")
     raw_jd = data.get("jobDescription") or data.get("job_description") or ""
     raw_style = data.get("interviewerStyle") or data.get("interviewer_style")
-    interviewer_style = raw_style if raw_style in {"Friendly coach", "Standard", "Tough", "Rapid-fire"} else "Standard"
+    interviewer_style = validate_interviewer_style(raw_style)
 
     # Silently return null if answer is too short (< 15 words) or empty
     words = [w for w in answer.split() if w]

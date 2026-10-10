@@ -4,6 +4,11 @@ from dotenv import load_dotenv
 import os
 import json
 import re
+from utils import (
+    sanitize_job_description,
+    sanitize_resume_text,
+    validate_interviewer_style,
+)
 
 # Load env vars
 load_dotenv()
@@ -363,11 +368,11 @@ def create_app():
             count = 5
 
         raw_jd = data.get("jobDescription") or data.get("job_description") or ""
-        job_description = str(raw_jd).strip()[:4000] if raw_jd else ""
+        job_description = sanitize_job_description(raw_jd)
         has_jd = bool(job_description)
 
         raw_resume = data.get("resumeText") or data.get("resume_text") or ""
-        resume_text = str(raw_resume).strip()[:6000] if raw_resume else ""
+        resume_text = sanitize_resume_text(raw_resume)
         has_resume = bool(resume_text)
 
         # Weak spots data validation & capping (max 2 categories up to 60 chars each, max 5 sample questions up to 300 chars each)
@@ -384,9 +389,8 @@ def create_app():
         has_weak_spots = bool(weak_categories or sample_questions)
 
         # Interviewer style validation & persona prompt directives
-        ALLOWED_STYLES = {"Friendly coach", "Standard", "Tough", "Rapid-fire"}
         raw_style = data.get("interviewerStyle") or data.get("interviewer_style")
-        interviewer_style = raw_style if raw_style in ALLOWED_STYLES else "Standard"
+        interviewer_style = validate_interviewer_style(raw_style)
 
         STYLE_DIRECTIVES = {
             "Friendly coach": "Interviewer Persona: Friendly coach. Tone is warm, empathetic, and encouraging. Frame questions helpfully, inviting the candidate to demonstrate their thinking with gentle scaffolding.",

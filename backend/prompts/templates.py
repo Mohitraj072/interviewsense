@@ -6,6 +6,9 @@ interview-quality output from Gemini 1.5 Pro.
 """
 
 
+from utils import validate_interviewer_style
+
+
 def build_question_prompt(
     interview_type: str,
     difficulty: str,
@@ -101,7 +104,7 @@ def build_follow_up_prompt(
     sanitized_answer = (answer or "").strip()[:3000]
     sanitized_jd = (job_description or "").strip()[:3000]
 
-    valid_style = interviewer_style if interviewer_style in {"Friendly coach", "Standard", "Tough", "Rapid-fire"} else "Standard"
+    valid_style = validate_interviewer_style(interviewer_style)
 
     style_directives = {
         "Friendly coach": "Interviewer Style Persona: Friendly coach. Tone is warm and encouraging. If a follow-up is warranted, phrase it constructively with a gentle hint or supportive nudge inviting the candidate to expand.",
