@@ -97,6 +97,96 @@ def generate_report():
         clean_json = re.sub(r"\s*```$", "", clean_json, flags=re.MULTILINE).strip()
         report_data = json.loads(clean_json)
 
+        # Process and enforce per-question data contract
+        raw_per_q = report_data.get("per_question", [])
+        clean_per_q = []
+        answered_scores = []
+
+        for i, pair in enumerate(qa_pairs):
+            q_text = pair.get("question", f"Question {i+1}")
+            a_text = pair.get("answer", "")
+            is_skipped = bool(pair.get("skipped")) or not a_text or a_text.strip() in ["(Candidate skipped this question)", ""]
+
+            pq_match = None
+            if i < len(raw_per_q):
+                pq_match = raw_per_q[i]
+            elif isinstance(raw_per_q, list):
+                for candidate_pq in raw_per_q:
+                    if candidate_pq.get("question_number") == i + 1:
+                        pq_match = candidate_pq
+                        break
+
+            pq_match = pq_match or {}
+
+            q_item = {
+                "question_number": i + 1,
+                "question": q_text,
+                "skipped": is_skipped,
+                "inputMode": pair.get("inputMode", "text"),
+                "duration": pair.get("duration", 0),
+                "tooShort": bool(pair.get("tooShort")),
+            }
+
+            if is_skipped:
+                q_item["answer"] = ""
+                q_item["score"] = None
+                q_item["feedback"] = None
+                q_item["ideal_answer"] = None
+                q_item["strengths"] = []
+                q_item["improvements"] = []
+            else:
+                q_item["answer"] = a_text
+                raw_score = pq_match.get("score")
+                if isinstance(raw_score, (int, float)):
+                    parsed_score = int(raw_score)
+                else:
+                    parsed_score = 70
+                q_item["score"] = parsed_score
+                answered_scores.append(parsed_score)
+                q_item["feedback"] = pq_match.get("feedback") or "Good answer addressing key concepts."
+                q_item["ideal_answer"] = pq_match.get("ideal_answer") or f"A strong response addresses core principles of {domain}."
+                q_item["strengths"] = pq_match.get("strengths") or []
+                q_item["improvements"] = pq_match.get("improvements") or []
+
+            wpm = pair.get("wpm")
+            if wpm is not None and not is_skipped and not q_item["tooShort"]:
+                q_item["wpm"] = wpm
+                q_item["wordCount"] = pair.get("wordCount")
+                q_item["durationSec"] = pair.get("durationSec")
+                q_item["fillerCount"] = pair.get("fillerCount")
+                q_item["fillerBreakdown"] = pair.get("fillerBreakdown")
+            elif pair.get("inputMode") == "voice":
+                q_item["wordCount"] = pair.get("wordCount", 0)
+                q_item["durationSec"] = pair.get("durationSec", pair.get("duration", 0))
+
+            clean_per_q.append(q_item)
+
+        report_data["per_question"] = clean_per_q
+
+        # Compute overall score and verdict only from answered questions
+        if answered_scores:
+            avg_score = round(sum(answered_scores) / len(answered_scores))
+            report_data["overall_score"] = avg_score
+            report_data["overall_verdict"] = (
+                "Exceptional" if avg_score >= 85 else
+                "Strong" if avg_score >= 70 else
+                "Average" if avg_score >= 50 else
+                "Needs Work"
+            )
+        else:
+            report_data["overall_score"] = None
+            report_data["overall_verdict"] = "No answers to evaluate"
+            report_data["summary"] = "No answers were provided during this session to evaluate."
+            report_data["skill_radar"] = {
+                "technical_accuracy": 0,
+                "communication": 0,
+                "problem_solving": 0,
+                "depth_of_knowledge": 0,
+                "confidence": 0,
+            }
+            report_data["top_strengths"] = []
+            report_data["top_improvements"] = ["Provide answers to questions to receive actionable feedback and skill scores."]
+
         return jsonify({
             "reportId": f"report_{session_id}",
             "sessionId": session_id,
@@ -105,90 +195,14 @@ def generate_report():
         })
 
     except Exception as e:
-        print(f"Report generation error: {e}, computing dynamic answer-based evaluation.")
-        from routes.interview import evaluate_answer_helper
-
-        per_question = []
-        scores = []
-        for i, pair in enumerate(qa_pairs):
-            q_text = pair.get("question", f"Question {i+1}")
-            a_text = pair.get("answer", "")
-            if pair.get("skipped"):
-                a_text = ""
-            wpm = pair.get("wpm")
-            filler_count = pair.get("fillerCount")
-            eval_result = evaluate_answer_helper(q_text, a_text, domain, difficulty, wpm=wpm, filler_count=filler_count)
-            score = eval_result["score"]
-            scores.append(score)
-            q_item = {
-                "question_number": i + 1,
-                "question": q_text,
-                "answer": a_text or "(Candidate skipped this question)",
-                "score": score,
-                "feedback": eval_result["feedback"],
-                "ideal_answer": eval_result["ideal_answer"],
-                "strengths": eval_result["strengths"],
-                "improvements": eval_result["improvements"],
-            }
-            if wpm is not None:
-                q_item["wpm"] = wpm
-                q_item["wordCount"] = pair.get("wordCount")
-                q_item["durationSec"] = pair.get("durationSec")
-                q_item["fillerCount"] = filler_count
-                q_item["fillerBreakdown"] = pair.get("fillerBreakdown")
-            per_question.append(q_item)
-
-        avg_score = round(sum(scores) / max(len(scores), 1)) if scores else 65
-        verdict = (
-            "Exceptional" if avg_score >= 85 else
-            "Strong" if avg_score >= 70 else
-            "Average" if avg_score >= 50 else
-            "Needs Work"
-        )
-
-        fallback_report = {
-            "overall_score": avg_score,
-            "overall_verdict": verdict,
-            "summary": f"Demonstrated {verdict.lower()} competence across {domain} concepts with meaningful strengths and targeted growth areas under {difficulty} conditions.",
-            "skill_radar": {
-                "technical_accuracy": max(35, min(95, avg_score + 2)),
-                "communication": max(40, min(95, avg_score - 2)),
-                "problem_solving": max(35, min(95, avg_score + 1)),
-                "depth_of_knowledge": max(30, min(95, avg_score - 4)),
-                "confidence": max(45, min(95, avg_score + 3)),
-            },
-            "per_question": per_question,
-            "top_strengths": [
-                f"Demonstrated working knowledge in {domain}",
-                "Structured approach to problem explanations",
-                "Committed effort across the interview session",
-            ],
-            "top_improvements": [
-                "Delve into edge cases, scalability, and performance bottlenecks",
-                "Practice elaborating on real-world system trade-offs",
-                "Refine technical conciseness and pacing",
-            ],
-            "studyPlan": [
-                {"day": "Day 1-2", "topic": f"{domain} Core Theory", "task": f"Review foundational definitions and memory models for {domain}."},
-                {"day": "Day 3-4", "topic": f"{domain} Applied Problems", "task": "Practice 5 hands-on architectural and coding scenarios."},
-                {"day": "Day 5-7", "topic": "Mock Interview Mastery", "task": "Conduct timed mock sessions focusing on articulate delivery."}
-            ],
-            "filler_word_count": data.get("fillerCount", 0),
-            "confidence_rating": "High" if avg_score >= 75 else "Medium" if avg_score >= 50 else "Low",
-            "recommended_resources": [
-                {"topic": domain, "type": "Course", "suggestion": f"Advanced {domain} Masterclass"},
-                {"topic": "System Design", "type": "Book", "suggestion": "Designing Data-Intensive Applications"},
-            ],
-            "next_steps": f"Review question feedback above and focus practice on {domain} topics with lower scores.",
-        }
-
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"[Gemini Report Generation Error] All model fallbacks failed:\n{error_trace}")
         return jsonify({
-            "reportId": f"report_{session_id}",
-            "sessionId": session_id,
-            "report": fallback_report,
-            "status": "fallback",
-            "note": str(e)
-        })
+            "error": "Failed to generate report evaluation with Gemini after all model fallbacks.",
+            "details": str(e),
+            "status": "error"
+        }), 500
 
 
 @report_bp.route("/<report_id>", methods=["GET"])

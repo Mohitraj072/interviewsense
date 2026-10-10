@@ -155,12 +155,13 @@ def build_report_prompt(
     for i, pair in enumerate(qa_pairs, 1):
         q = pair.get('question', 'N/A')
         a = pair.get('answer', '')
-        if not a or pair.get('skipped'):
-            a = "(Candidate skipped or provided no answer)"
+        is_skipped = bool(pair.get('skipped')) or not a or a.strip() in ['(Candidate skipped this question)', '']
+        if is_skipped:
+            a = "(SKIPPED - Candidate skipped this question)"
         analytics_line = ""
         wpm = pair.get('wpm')
         filler_count = pair.get('fillerCount')
-        if wpm is not None and filler_count is not None:
+        if wpm is not None and filler_count is not None and not is_skipped:
             analytics_line = f"\nCandidate Speaking Delivery: Pace: {wpm} WPM | Filler Words: {filler_count}"
         qa_block += f"""
 Question {i}: {q}
@@ -178,18 +179,35 @@ Interview Details:
 Questions and Answers:
 {qa_block}
 
-SCORING RULES FOR EACH QUESTION:
-- A blank, skipped, or wrong answer MUST score 20-40
-- A partial or high-level answer missing key depth MUST score 40-70
-- A good answer addressing main points with minor gaps MUST score 70-85
-- An excellent detailed answer showing mastery MUST score 85-100
-- DO NOT assign the same score to every question. Scores must reflect each specific answer.
-- When candidate speaking metrics (pace in WPM and filler word count) are included for voice answers, factor them into your communication assessment and provide constructive feedback on pacing and verbal clarity.
+CRITICAL SCORING RULES:
+1. SKIPPED QUESTIONS:
+   - For any question marked "(SKIPPED - Candidate skipped this question)", you MUST set:
+     "score": null,
+     "feedback": null,
+     "ideal_answer": null,
+     "strengths": [],
+     "improvements": []
+   - Do NOT invent a fake score, feedback, or generic ideal answer for skipped questions.
+2. ANSWERED QUESTIONS:
+   - A wrong answer MUST score 20-40
+   - A partial or high-level answer missing key depth MUST score 40-70
+   - A good answer addressing main points with minor gaps MUST score 70-85
+   - An excellent detailed answer showing mastery MUST score 85-100
+   - DO NOT assign the same score to every question. Scores must reflect each specific answer.
+3. OVERALL SCORE, RADAR CHART, AND VERDICT:
+   - Skipped questions MUST BE COMPLETELY EXCLUDED from the overall_score, overall_verdict, skill_radar, top_strengths, and top_improvements.
+   - Compute overall_score strictly as the average of ANSWERED questions only.
+   - If NO question was answered (all questions skipped):
+     - "overall_score": null
+     - "overall_verdict": "No answers to evaluate"
+     - "summary": "No answers were provided during this session to evaluate."
+     - "skill_radar": {{"technical_accuracy": 0, "communication": 0, "problem_solving": 0, "depth_of_knowledge": 0, "confidence": 0}}
+   - When candidate speaking metrics (pace in WPM and filler word count) are included for voice answers, factor them into your communication assessment.
 
 Generate a JSON report ONLY (no markdown code blocks, output raw JSON directly):
 {{
-  "overall_score": <weighted average score 0-100>,
-  "overall_verdict": "<Exceptional | Strong | Average | Needs Work>",
+  "overall_score": <average score of answered questions 0-100, or null if all skipped>,
+  "overall_verdict": "<Exceptional | Strong | Average | Needs Work | No answers to evaluate>",
   "summary": "<2-3 sentence candid executive summary of candidate performance>",
   "skill_radar": {{
     "technical_accuracy": <0-100>,
@@ -202,12 +220,12 @@ Generate a JSON report ONLY (no markdown code blocks, output raw JSON directly):
     {{
       "question_number": <int 1-based>,
       "question": "<the exact question text>",
-      "answer": "<candidate answer>",
-      "score": <score 20-100 strictly adhering to tiers above>,
-      "feedback": "<2-3 sentences of direct constructive feedback>",
-      "ideal_answer": "<concise 3-4 sentence model answer>",
-      "strengths": ["<strength 1>", "<strength 2>"],
-      "improvements": ["<improvement 1>", "<improvement 2>"]
+      "answer": "<candidate answer or empty string if skipped>",
+      "score": <score 20-100 adhering to tiers above, or null if skipped>,
+      "feedback": <string feedback or null if skipped>,
+      "ideal_answer": <string ideal answer or null if skipped>,
+      "strengths": [<strength strings, or empty array if skipped>],
+      "improvements": [<improvement strings, or empty array if skipped>]
     }}
   ],
   "top_strengths": ["<strength 1>", "<strength 2>", "<strength 3>"],

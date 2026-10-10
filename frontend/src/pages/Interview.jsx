@@ -104,12 +104,39 @@ export const countFillers = (text = '') => {
 
 export function computeSpeakingAnalytics(text = '', durationSec = 0) {
   const clean = (text || '').trim()
-  if (!clean) return null
+  const safeDuration = Math.max(0, Math.round(durationSec))
+  if (!clean) {
+    return {
+      tooShort: true,
+      wordCount: 0,
+      durationSec: safeDuration,
+      wpm: null,
+      fillerCount: 0,
+      definiteFillerCount: 0,
+      possibleFillerCount: 0,
+      fillerBreakdown: {},
+    }
+  }
 
   const words = clean.split(/\s+/).filter(Boolean)
   const wordCount = words.length
-  const safeDuration = Math.max(1, Math.round(durationSec))
-  const wpm = Math.round((wordCount / safeDuration) * 60)
+
+  // Voice answers that are too short to measure (under 8 seconds or under 15 words)
+  // should show "Answer too short to analyze", not invented numbers.
+  if (safeDuration < 8 || wordCount < 15) {
+    return {
+      tooShort: true,
+      wordCount,
+      durationSec: safeDuration,
+      wpm: null,
+      fillerCount: 0,
+      definiteFillerCount: 0,
+      possibleFillerCount: 0,
+      fillerBreakdown: {},
+    }
+  }
+
+  const wpm = Math.round((wordCount / Math.max(1, safeDuration)) * 60)
 
   const lower = clean.toLowerCase()
   const fillerBreakdown = {}
@@ -133,6 +160,7 @@ export function computeSpeakingAnalytics(text = '', durationSec = 0) {
   const fillerCount = definiteCount + possibleCount
 
   return {
+    tooShort: false,
     wpm,
     wordCount,
     durationSec: safeDuration,
@@ -697,7 +725,7 @@ export default function Interview() {
 
     // Compute speaking analytics ONLY for voice-mode answers that are not skipped
     const analytics =
-      inputMode === 'voice' && !skipped && finalAnswer
+      inputMode === 'voice' && !skipped
         ? computeSpeakingAnalytics(finalAnswer, questionDuration)
         : null
 
@@ -708,6 +736,7 @@ export default function Interview() {
       skipped,
       duration: questionDuration,
       inputMode,
+      tooShort: Boolean(analytics?.tooShort),
     }
 
     if (analytics) {
@@ -726,8 +755,10 @@ export default function Interview() {
     // Check if last question
     if (currentIndex + 1 >= questions.length) {
       // All questions completed → Redirect to report
-      const allText = updatedAnswers.map((a) => a.answer).join(' ')
-      const totalFillers = countFillers(allText)
+      const measuredAnswers = updatedAnswers.filter(
+        (a) => a.inputMode === 'voice' && !a.skipped && !a.tooShort && typeof a.wpm === 'number'
+      )
+      const totalFillers = measuredAnswers.reduce((sum, a) => sum + (a.fillerCount || 0), 0)
       const sessionId = `sess_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
 
       const qaHistory = updatedAnswers.map((item, idx) => {
@@ -738,8 +769,9 @@ export default function Interview() {
           skipped: item.skipped,
           duration: item.duration,
           inputMode: item.inputMode,
+          tooShort: Boolean(item.tooShort),
         }
-        if (typeof item.wpm === 'number') {
+        if (typeof item.wpm === 'number' && !item.tooShort && !item.skipped) {
           qaItem.wpm = item.wpm
           qaItem.wordCount = item.wordCount
           qaItem.durationSec = item.durationSec
@@ -747,6 +779,9 @@ export default function Interview() {
           qaItem.fillerBreakdown = item.fillerBreakdown
           qaItem.definiteFillerCount = item.definiteFillerCount
           qaItem.possibleFillerCount = item.possibleFillerCount
+        } else if (item.inputMode === 'voice') {
+          qaItem.wordCount = item.wordCount || 0
+          qaItem.durationSec = item.durationSec ?? item.duration ?? 0
         }
         return qaItem
       })

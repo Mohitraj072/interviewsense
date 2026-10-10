@@ -16,12 +16,14 @@ import axios from 'axios'
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000'
 
 // ─── Visual Score Gauge Component ──────────────────────────────────────────
-function ScoreGauge({ score = 0, verdict = 'Strong' }) {
+function ScoreGauge({ score = null, verdict = 'Strong' }) {
+  const hasScore = typeof score === 'number'
   const radius = 64
   const circumference = 2 * Math.PI * radius
-  const strokeDashoffset = circumference - (score / 100) * circumference
+  const strokeDashoffset = hasScore ? circumference - (score / 100) * circumference : circumference
 
   const getColor = (s) => {
+    if (s === null || s === undefined) return '#9CA3AF'
     if (s >= 80) return '#10B981' // Green
     if (s >= 65) return '#6366F1' // Indigo
     if (s >= 50) return '#F59E0B' // Amber
@@ -62,8 +64,14 @@ function ScoreGauge({ score = 0, verdict = 'Strong' }) {
           transition={{ duration: 0.6, delay: 0.3 }}
           className="text-4xl font-extrabold text-text-primary tracking-tight font-heading"
         >
-          {score}
-          <span className="text-xl font-normal text-text-muted">/100</span>
+          {hasScore ? (
+            <>
+              {score}
+              <span className="text-xl font-normal text-text-muted">/100</span>
+            </>
+          ) : (
+            <span className="text-3xl text-text-muted font-normal">—</span>
+          )}
         </motion.span>
         <span
           className="text-xs font-semibold px-2.5 py-0.5 mt-1 rounded-full uppercase tracking-wider"
@@ -223,11 +231,12 @@ function SkillRadarSVG({ skills = {} }) {
 
 // ─── Speaking Analytics Component ───────────────────────────────────────────
 function SpeakingAnalyticsCard({ questions = [] }) {
-  const voiceQuestions = questions.filter(
-    (q) => typeof q.wpm === 'number' && q.wpm > 0 && !q.skipped
+  const hasVoiceMode = questions.some((q) => q.inputMode === 'voice')
+  const measuredVoiceQuestions = questions.filter(
+    (q) => q.inputMode === 'voice' && !q.skipped && !q.tooShort && typeof q.wpm === 'number' && q.wpm > 0
   )
 
-  if (voiceQuestions.length === 0) {
+  if (!hasVoiceMode) {
     return (
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -254,9 +263,36 @@ function SpeakingAnalyticsCard({ questions = [] }) {
     )
   }
 
+  if (measuredVoiceQuestions.length === 0) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.25 }}
+        className="glass-card p-5 sm:p-6 relative overflow-hidden"
+        style={{
+          border: '1px solid var(--surface-border)',
+          background: 'var(--card-bg)',
+        }}
+      >
+        <div className="flex items-start gap-3.5">
+          <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+            <Mic className="w-5 h-5 text-amber-400" />
+          </div>
+          <div className="flex-1">
+            <h3 className="text-sm sm:text-base font-bold text-text-primary mb-1">Speaking Analytics</h3>
+            <p className="text-xs text-text-secondary leading-relaxed">
+              Answer too short to analyze: Spoken answers were under 8 seconds or under 15 words, which is too brief to calculate pacing and filler metrics reliably.
+            </p>
+          </div>
+        </div>
+      </motion.div>
+    )
+  }
+
   // Calculate average pace
   const avgWpm = Math.round(
-    voiceQuestions.reduce((sum, q) => sum + q.wpm, 0) / voiceQuestions.length
+    measuredVoiceQuestions.reduce((sum, q) => sum + q.wpm, 0) / measuredVoiceQuestions.length
   )
 
   // Verdict calculation:
@@ -272,14 +308,14 @@ function SpeakingAnalyticsCard({ questions = [] }) {
   }
 
   // Total filler words
-  const totalFillers = voiceQuestions.reduce(
+  const totalFillers = measuredVoiceQuestions.reduce(
     (sum, q) => sum + (q.fillerCount || 0),
     0
   )
 
   // Aggregate filler breakdown map
   const aggregateBreakdown = {}
-  voiceQuestions.forEach((q) => {
+  measuredVoiceQuestions.forEach((q) => {
     if (q.fillerBreakdown) {
       Object.entries(q.fillerBreakdown).forEach(([word, count]) => {
         aggregateBreakdown[word] = (aggregateBreakdown[word] || 0) + count
@@ -293,7 +329,7 @@ function SpeakingAnalyticsCard({ questions = [] }) {
     .slice(0, 3)
 
   // Max WPM for bar chart scaling (minimum ceiling 200)
-  const maxWpm = Math.max(200, ...voiceQuestions.map((q) => q.wpm))
+  const maxWpm = Math.max(200, ...measuredVoiceQuestions.map((q) => q.wpm))
 
   return (
     <motion.div
@@ -320,7 +356,7 @@ function SpeakingAnalyticsCard({ questions = [] }) {
               </span>
             </h2>
             <p className="text-xs text-text-muted mt-0.5">
-              Real-time speech pacing & filler word detection across {voiceQuestions.length} spoken {voiceQuestions.length === 1 ? 'question' : 'questions'}
+              Real-time speech pacing & filler word detection across {measuredVoiceQuestions.length} spoken {measuredVoiceQuestions.length === 1 ? 'question' : 'questions'}
             </p>
           </div>
         </div>
@@ -421,7 +457,10 @@ function SpeakingAnalyticsCard({ questions = [] }) {
 
         {/* Horizontal bars per question - fully responsive down to 360px */}
         <div className="space-y-2.5">
-          {voiceQuestions.map((q, idx) => {
+          {questions.map((q, idx) => {
+            const isVoice = q.inputMode === 'voice'
+            const isSkipped = Boolean(q.skipped)
+            const isShort = isVoice && !isSkipped && (q.tooShort || (!q.wpm && ((q.wordCount ?? 0) < 15 || (q.durationSec ?? q.duration ?? 0) < 8)))
             const w = q.wpm || 0
             const pct = Math.min(100, Math.round((w / maxWpm) * 100))
             const isGood = w >= 100 && w <= 165
@@ -432,30 +471,46 @@ function SpeakingAnalyticsCard({ questions = [] }) {
                 <span className="w-6 sm:w-7 font-mono font-bold text-text-muted text-[11px] flex-shrink-0">
                   Q{qNum}
                 </span>
-                <div className="flex-1 h-5 rounded-md bg-surface border border-surface-border/60 relative overflow-hidden flex items-center">
-                  {/* Optimal zone background indicator (100-165 WPM) */}
-                  <div
-                    className="absolute top-0 bottom-0 bg-emerald-500/5 border-x border-emerald-500/20 pointer-events-none"
-                    style={{
-                      left: `${(100 / maxWpm) * 100}%`,
-                      width: `${((165 - 100) / maxWpm) * 100}%`,
-                    }}
-                  />
-                  {/* Actual WPM bar */}
-                  <motion.div
-                    initial={{ width: 0 }}
-                    animate={{ width: `${pct}%` }}
-                    transition={{ duration: 0.6, delay: idx * 0.08 }}
-                    className={`h-full rounded-sm transition-all ${
-                      isGood
-                        ? 'bg-gradient-to-r from-emerald-500 to-teal-400'
-                        : 'bg-gradient-to-r from-amber-500 to-orange-400'
-                    }`}
-                  />
-                </div>
-                <div className="w-14 sm:w-16 text-right font-mono font-semibold text-text-primary text-[11px] flex-shrink-0">
-                  {w} <span className="text-text-muted font-normal text-[10px]">WPM</span>
-                </div>
+                {isSkipped ? (
+                  <div className="flex-1 h-5 rounded-md bg-surface border border-surface-border/40 px-2.5 flex items-center">
+                    <span className="text-[10px] text-text-muted italic">Skipped</span>
+                  </div>
+                ) : !isVoice ? (
+                  <div className="flex-1 h-5 rounded-md bg-surface border border-surface-border/40 px-2.5 flex items-center">
+                    <span className="text-[10px] text-text-muted">Text answer</span>
+                  </div>
+                ) : isShort ? (
+                  <div className="flex-1 h-5 rounded-md bg-amber-500/10 border border-amber-500/20 px-2.5 flex items-center">
+                    <span className="text-[10px] text-amber-400 font-medium">Answer too short to analyze</span>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex-1 h-5 rounded-md bg-surface border border-surface-border/60 relative overflow-hidden flex items-center">
+                      {/* Optimal zone background indicator (100-165 WPM) */}
+                      <div
+                        className="absolute top-0 bottom-0 bg-emerald-500/5 border-x border-emerald-500/20 pointer-events-none"
+                        style={{
+                          left: `${(100 / maxWpm) * 100}%`,
+                          width: `${((165 - 100) / maxWpm) * 100}%`,
+                        }}
+                      />
+                      {/* Actual WPM bar */}
+                      <motion.div
+                        initial={{ width: 0 }}
+                        animate={{ width: `${pct}%` }}
+                        transition={{ duration: 0.6, delay: idx * 0.08 }}
+                        className={`h-full rounded-sm transition-all ${
+                          isGood
+                            ? 'bg-gradient-to-r from-emerald-500 to-teal-400'
+                            : 'bg-gradient-to-r from-amber-500 to-orange-400'
+                        }`}
+                      />
+                    </div>
+                    <div className="w-14 sm:w-16 text-right font-mono font-semibold text-text-primary text-[11px] flex-shrink-0">
+                      {w} <span className="text-text-muted font-normal text-[10px]">WPM</span>
+                    </div>
+                  </>
+                )}
               </div>
             )
           })}
@@ -502,8 +557,6 @@ export default function Report() {
       if (stateData && stateData.qaHistory) {
         const { qaHistory, config, fillerCount, sessionId } = stateData
 
-        let finalReport = null
-
         try {
           // Call backend report generator
           const res = await axios.post(`${API_BASE}/api/report/generate`, {
@@ -515,143 +568,113 @@ export default function Report() {
             qa_pairs: qaHistory,
           })
 
-          if (res.data?.report) {
+          if (res.data?.report && res.data.status !== 'error') {
             finalReport = res.data.report
+          } else {
+            throw new Error(res.data?.error || 'Failed to generate report evaluation with Gemini.')
           }
         } catch (err) {
-          console.warn('Backend report error, computing from local qaHistory:', err)
+          clearTimeout(wakeTimer)
+          setIsServerWaking(false)
+          console.error('Report evaluation failed:', err)
+          setReportError({
+            title: 'Evaluation Failed',
+            message:
+              err.response?.data?.details ||
+              err.response?.data?.error ||
+              err.message ||
+              'Gemini evaluation failed after all fallbacks. Please retry.',
+          })
+          setLoading(false)
+          return
         }
 
-        // Map per-question evaluations
-        let finalQuestions = []
-        if (finalReport?.per_question && finalReport.per_question.length > 0) {
-          finalQuestions = finalReport.per_question.map((pq, idx) => {
-            const hist = qaHistory[idx] || {}
-            const item = {
-              question: pq.question || hist.question || `Question ${idx + 1}`,
-              answer: pq.answer || hist.answer || '',
-              score: typeof pq.score === 'number' ? pq.score : 70,
-              feedback: pq.feedback || '',
-              ideal_answer: pq.ideal_answer || '',
-              strengths: pq.strengths || [],
-              improvements: pq.improvements || [],
-            }
-            if (typeof hist.wpm === 'number' || typeof pq.wpm === 'number') {
-              item.wpm = typeof hist.wpm === 'number' ? hist.wpm : pq.wpm
-              item.wordCount = hist.wordCount ?? pq.wordCount ?? 0
-              item.durationSec = hist.durationSec ?? pq.durationSec ?? 0
-              item.fillerCount = hist.fillerCount ?? pq.fillerCount ?? 0
-              item.fillerBreakdown = hist.fillerBreakdown || pq.fillerBreakdown || {}
-              item.definiteFillerCount = hist.definiteFillerCount ?? pq.definiteFillerCount ?? 0
-              item.possibleFillerCount = hist.possibleFillerCount ?? pq.possibleFillerCount ?? 0
-            }
-            return item
-          })
-        } else {
-          finalQuestions = qaHistory.map((q, idx) => {
-            const answerText = (q.answer || '').trim()
-            const wordCount = answerText ? answerText.split(/\s+/).filter(Boolean).length : 0
-            const isSkipped = q.skipped || !answerText || answerText.toLowerCase().includes('skipped')
+        clearTimeout(wakeTimer)
+        setIsServerWaking(false)
 
-            let fallbackScore = 75
-            let feedback = 'Good answer addressing the core concepts.'
-            let strengths = ['Identified core terminology and approach']
-            let improvements = ['Deepen implementation trade-offs']
+        // Map per-question evaluations and retain metadata
+        const finalQuestions = (finalReport?.per_question || []).map((pq, idx) => {
+          const hist = qaHistory[idx] || {}
+          const isSkipped = Boolean(pq.skipped || hist.skipped)
+          const isTooShort = Boolean(pq.tooShort || hist.tooShort)
+          const inputMode = hist.inputMode || pq.inputMode || 'text'
 
-            if (isSkipped) {
-              fallbackScore = 25
-              feedback = 'No answer provided for this question. In an interview, offering an educated attempt is always better than skipping.'
-              strengths = []
-              improvements = ['Always attempt a high-level conceptual framework even when unsure']
-            } else if (wordCount < 15) {
-              fallbackScore = 38
-              feedback = 'Answer was very brief and lacked required technical depth.'
-              strengths = ['Addressed topic direction']
-              improvements = ['Elaborate on mechanisms and concrete examples']
-            } else if (wordCount < 35) {
-              fallbackScore = 58
-              feedback = 'Covers basic definitions but omits edge cases, scale constraints, and architectural details.'
-              strengths = ['Clear communication', 'Understood basic question premise']
-              improvements = ['Include runtime complexities and concrete trade-offs']
-            } else if (wordCount < 65) {
-              fallbackScore = 78
-              feedback = 'Solid, well-structured response with good domain terminology and clear logic.'
-              strengths = ['Methodical approach', 'Accurate domain concepts explained']
-              improvements = ['Include production scale considerations']
-            } else {
-              fallbackScore = 88
-              feedback = 'Excellent, detailed response demonstrating thorough domain mastery and strong technical articulation.'
-              strengths = ['Comprehensive coverage', 'Clear technical structure', 'Strong depth']
-              improvements = ['Mention extreme-scale edge cases']
-            }
+          const item = {
+            question: pq.question || hist.question || `Question ${idx + 1}`,
+            answer: isSkipped ? '' : (pq.answer || hist.answer || ''),
+            skipped: isSkipped,
+            score: isSkipped ? null : (typeof pq.score === 'number' ? pq.score : null),
+            feedback: isSkipped ? null : (pq.feedback || ''),
+            ideal_answer: isSkipped ? null : (pq.ideal_answer || ''),
+            strengths: isSkipped ? [] : (pq.strengths || []),
+            improvements: isSkipped ? [] : (pq.improvements || []),
+            inputMode,
+            tooShort: isTooShort,
+            duration: hist.duration ?? pq.duration ?? 0,
+          }
 
-            const item = {
-              question: q.question || `Question ${idx + 1}`,
-              answer: answerText || '(Candidate skipped this question)',
-              score: fallbackScore,
-              feedback,
-              ideal_answer: q.ideal_answer || `A strong response explains the core principles of ${config?.domain || 'this topic'}, runtime complexity, and practical trade-offs.`,
-              strengths,
-              improvements,
-            }
-            if (typeof q.wpm === 'number') {
-              item.wpm = q.wpm
-              item.wordCount = q.wordCount ?? 0
-              item.durationSec = q.durationSec ?? 0
-              item.fillerCount = q.fillerCount ?? 0
-              item.fillerBreakdown = q.fillerBreakdown || {}
-              item.definiteFillerCount = q.definiteFillerCount ?? 0
-              item.possibleFillerCount = q.possibleFillerCount ?? 0
-            }
-            return item
-          })
-        }
+          if (typeof hist.wpm === 'number' || typeof pq.wpm === 'number') {
+            item.wpm = typeof hist.wpm === 'number' ? hist.wpm : pq.wpm
+            item.wordCount = hist.wordCount ?? pq.wordCount ?? 0
+            item.durationSec = hist.durationSec ?? pq.durationSec ?? 0
+            item.fillerCount = hist.fillerCount ?? pq.fillerCount ?? 0
+            item.fillerBreakdown = hist.fillerBreakdown || pq.fillerBreakdown || {}
+            item.definiteFillerCount = hist.definiteFillerCount ?? pq.definiteFillerCount ?? 0
+            item.possibleFillerCount = hist.possibleFillerCount ?? pq.possibleFillerCount ?? 0
+          } else if (inputMode === 'voice') {
+            item.wordCount = hist.wordCount ?? pq.wordCount ?? 0
+            item.durationSec = hist.durationSec ?? pq.durationSec ?? 0
+          }
 
-        const computedAvg = finalQuestions.length
-          ? Math.round(finalQuestions.reduce((a, b) => a + b.score, 0) / finalQuestions.length)
-          : 72
+          return item
+        })
 
-        const overallScore = typeof finalReport?.overall_score === 'number' ? finalReport.overall_score : computedAvg
-        const overallVerdict =
-          finalReport?.overall_verdict ||
-          (overallScore >= 85 ? 'Exceptional' : overallScore >= 70 ? 'Strong' : overallScore >= 50 ? 'Average' : 'Needs Work')
+        const answeredQuestions = finalQuestions.filter((q) => !q.skipped && typeof q.score === 'number')
+        const hasAnswered = answeredQuestions.length > 0
+
+        const computedAvg = hasAnswered
+          ? Math.round(answeredQuestions.reduce((a, b) => a + b.score, 0) / answeredQuestions.length)
+          : null
+
+        const overallScore = typeof finalReport?.overall_score === 'number'
+          ? finalReport.overall_score
+          : computedAvg
+
+        const overallVerdict = !hasAnswered
+          ? 'No answers to evaluate'
+          : (finalReport?.overall_verdict ||
+              (overallScore >= 85 ? 'Exceptional' : overallScore >= 70 ? 'Strong' : overallScore >= 50 ? 'Average' : 'Needs Work'))
 
         const completedReport = {
           ...(finalReport || {}),
           overall_score: overallScore,
           overall_verdict: overallVerdict,
-          summary:
-            finalReport?.summary ||
-            `Candidate demonstrated ${overallVerdict.toLowerCase()} command across ${config?.domain || 'core'} concepts under ${config?.difficulty || 'Medium'} interview conditions.`,
-          skill_radar: finalReport?.skill_radar || {
-            technical_accuracy: Math.min(95, overallScore + 2),
-            communication: Math.min(95, overallScore - 2),
-            problem_solving: Math.min(95, overallScore + 1),
-            depth_of_knowledge: Math.min(95, overallScore - 4),
-            confidence: Math.min(95, overallScore + 3),
-          },
-          top_strengths: finalReport?.top_strengths || [
-            'Methodical problem-solving thought process',
-            `Solid grasp of foundational ${config?.domain || 'technical'} concepts`,
-            'Consistent effort throughout the mock interview',
-          ],
-          top_improvements: finalReport?.top_improvements || [
-            'Provide deeper analysis of edge cases and architectural trade-offs',
-            'Elaborate on production failure modes and scalability considerations',
-            'Reduce conversational pause duration under timed conditions',
-          ],
-          studyPlan: finalReport?.studyPlan || [
-            { day: 'Day 1-2', topic: `${config?.domain || 'Domain'} Core Theory`, task: 'Review core definitions, system invariants, and data structures.' },
-            { day: 'Day 3-4', topic: 'Hands-on Practice', task: 'Solve 5 practical architectural scenarios focusing on edge cases.' },
-            { day: 'Day 5-7', topic: 'Timed Mock Practice', task: 'Practice articulate vocal delivery under strict time constraints.' },
-          ],
+          summary: !hasAnswered
+            ? 'No answers were provided during this session to evaluate.'
+            : (finalReport?.summary ||
+                `Candidate demonstrated ${overallVerdict.toLowerCase()} command across ${config?.domain || 'core'} concepts under ${config?.difficulty || 'Medium'} interview conditions.`),
+          skill_radar: hasAnswered
+            ? (finalReport?.skill_radar || {
+                technical_accuracy: Math.min(95, (overallScore ?? 70) + 2),
+                communication: Math.min(95, (overallScore ?? 70) - 2),
+                problem_solving: Math.min(95, (overallScore ?? 70) + 1),
+                depth_of_knowledge: Math.min(95, (overallScore ?? 70) - 4),
+                confidence: Math.min(95, (overallScore ?? 70) + 3),
+              })
+            : {
+                technical_accuracy: 0,
+                communication: 0,
+                problem_solving: 0,
+                depth_of_knowledge: 0,
+                confidence: 0,
+              },
+          top_strengths: hasAnswered ? (finalReport?.top_strengths || []) : [],
+          top_improvements: hasAnswered ? (finalReport?.top_improvements || []) : ['Provide answers to questions to receive actionable feedback and scores.'],
+          studyPlan: finalReport?.studyPlan || [],
           filler_word_count: fillerCount || 0,
-          confidence_rating: overallScore >= 75 ? 'High' : overallScore >= 50 ? 'Medium' : 'Low',
-          recommended_resources: finalReport?.recommended_resources || [
-            { topic: config?.domain || 'DSA', type: 'Course', suggestion: `Advanced ${config?.domain || 'Technical'} Masterclass` },
-            { topic: 'System Design', type: 'Book', suggestion: 'Designing Data-Intensive Applications' },
-          ],
-          next_steps: finalReport?.next_steps || 'Review the question-by-question feedback below and target specific weak areas in your next session.',
+          confidence_rating: !hasAnswered ? 'N/A' : (overallScore >= 75 ? 'High' : overallScore >= 50 ? 'Medium' : 'Low'),
+          recommended_resources: finalReport?.recommended_resources || [],
+          next_steps: finalReport?.next_steps || '',
           per_question: finalQuestions,
         }
 
@@ -680,13 +703,16 @@ export default function Report() {
                 const qDoc = {
                   question: q.question,
                   answer: q.answer,
+                  skipped: Boolean(q.skipped),
                   score: q.score,
                   feedback: q.feedback || '',
                   ideal_answer: q.ideal_answer || '',
                   strengths: q.strengths || [],
                   improvements: q.improvements || [],
+                  inputMode: q.inputMode || 'text',
+                  tooShort: Boolean(q.tooShort),
                 }
-                if (typeof q.wpm === 'number') {
+                if (typeof q.wpm === 'number' && !q.tooShort && !q.skipped) {
                   qDoc.wpm = q.wpm
                   qDoc.wordCount = q.wordCount ?? 0
                   qDoc.durationSec = q.durationSec ?? 0
@@ -732,16 +758,20 @@ export default function Report() {
             const verdict = data.verdict || (avgScore >= 80 ? 'Exceptional' : avgScore >= 65 ? 'Strong' : 'Average')
 
             const questionsList = (data.questions || data.qaHistory || []).map((q, idx) => {
+              const isSkipped = Boolean(q.skipped)
               const qObj = {
                 question: q.question || `Question ${idx + 1}`,
-                answer: q.answer || '',
-                score: typeof q.score === 'number' ? q.score : avgScore,
-                feedback: q.feedback || '',
-                ideal_answer: q.ideal_answer || '',
-                strengths: q.strengths || [],
-                improvements: q.improvements || [],
+                answer: isSkipped ? '' : (q.answer || ''),
+                skipped: isSkipped,
+                score: isSkipped ? null : (typeof q.score === 'number' ? q.score : avgScore),
+                feedback: isSkipped ? null : (q.feedback || ''),
+                ideal_answer: isSkipped ? null : (q.ideal_answer || ''),
+                strengths: isSkipped ? [] : (q.strengths || []),
+                improvements: isSkipped ? [] : (q.improvements || []),
+                inputMode: q.inputMode || 'text',
+                tooShort: Boolean(q.tooShort),
               }
-              if (typeof q.wpm === 'number') {
+              if (typeof q.wpm === 'number' && !q.tooShort && !isSkipped) {
                 qObj.wpm = q.wpm
                 qObj.wordCount = q.wordCount ?? 0
                 qObj.durationSec = q.durationSec ?? 0
@@ -1026,57 +1056,69 @@ export default function Report() {
       </header>
 
       {/* Main Content */}
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-8">
-        {/* Header Hero Card */}
-        <motion.div
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="glass-card p-6 sm:p-8 relative overflow-hidden"
-          style={{
-            background: 'linear-gradient(135deg, rgba(99,102,241,0.08) 0%, rgba(139,92,246,0.04) 100%)',
-            border: '1px solid rgba(99,102,241,0.2)',
-          }}
-        >
-          <div className="flex flex-col lg:flex-row items-center gap-8 justify-between">
-            {/* Left: Summary text */}
-            <div className="flex-1 space-y-3 text-center lg:text-left">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-brand-indigo/10 border border-brand-indigo/30 text-brand-indigo">
-                <Sparkles className="w-3.5 h-3.5" /> Interview Performance Report
-              </div>
-              <h1 className="text-2xl sm:text-3xl font-extrabold text-text-primary tracking-tight font-heading">
-                Assessment Verdict:{' '}
-                <span className="gradient-text-brand">{reportData.overall_verdict}</span>
-              </h1>
-              <p className="text-text-secondary text-sm leading-relaxed max-w-xl">
-                {reportData.summary}
-              </p>
-              <div className="flex flex-wrap items-center justify-center lg:justify-start gap-4 pt-2 text-xs text-text-muted">
-                {(sessionMeta?.config?.jobTitle || reportData?.jobTitle) && (
-                  <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 font-semibold">
-                    <Briefcase className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0" />
-                    <span>Role: <strong className="text-text-primary">{sessionMeta?.config?.jobTitle || reportData?.jobTitle}</strong></span>
-                  </span>
-                )}
-                <span className="flex items-center gap-1.5">
-                  <Target className="w-4 h-4 text-brand-indigo" />
-                  {sessionMeta?.qaHistory?.length || 10} Questions Evaluated
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                  Confidence:{' '}
-                  <span className="font-semibold text-text-primary">
-                    {reportData.confidence_rating || 'High'}
-                  </span>
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <MessageSquare className="w-4 h-4 text-amber-400" />
-                  Fillers Detected:{' '}
-                  <span className="font-semibold text-text-primary">
-                    {sessionMeta?.fillerCount ?? reportData.filler_word_count ?? 0}
-                  </span>
-                </span>
-              </div>
-            </div>
+      {(() => {
+        const allReportQuestions = reportData?.per_question || sessionMeta?.qaHistory || []
+        const answeredQuestionsCount = allReportQuestions.filter((q) => !q.skipped && typeof q.score === 'number').length
+        const measuredVoiceItems = allReportQuestions.filter(
+          (q) => q.inputMode === 'voice' && !q.skipped && !q.tooShort && typeof q.wpm === 'number' && q.wpm > 0
+        )
+        const hasSpeakingAnalytics = measuredVoiceItems.length > 0
+        const totalMeasuredFillers = measuredVoiceItems.reduce((sum, q) => sum + (q.fillerCount || 0), 0)
+
+        return (
+          <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-8">
+            {/* Header Hero Card */}
+            <motion.div
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="glass-card p-6 sm:p-8 relative overflow-hidden"
+              style={{
+                background: 'linear-gradient(135deg, rgba(99,102,241,0.08) 0%, rgba(139,92,246,0.04) 100%)',
+                border: '1px solid rgba(99,102,241,0.2)',
+              }}
+            >
+              <div className="flex flex-col lg:flex-row items-center gap-8 justify-between">
+                {/* Left: Summary text */}
+                <div className="flex-1 space-y-3 text-center lg:text-left">
+                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-brand-indigo/10 border border-brand-indigo/30 text-brand-indigo">
+                    <Sparkles className="w-3.5 h-3.5" /> Interview Performance Report
+                  </div>
+                  <h1 className="text-2xl sm:text-3xl font-extrabold text-text-primary tracking-tight font-heading">
+                    Assessment Verdict:{' '}
+                    <span className="gradient-text-brand">{reportData.overall_verdict}</span>
+                  </h1>
+                  <p className="text-text-secondary text-sm leading-relaxed max-w-xl">
+                    {reportData.summary}
+                  </p>
+                  <div className="flex flex-wrap items-center justify-center lg:justify-start gap-4 pt-2 text-xs text-text-muted">
+                    {(sessionMeta?.config?.jobTitle || reportData?.jobTitle) && (
+                      <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 font-semibold">
+                        <Briefcase className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0" />
+                        <span>Role: <strong className="text-text-primary">{sessionMeta?.config?.jobTitle || reportData?.jobTitle}</strong></span>
+                      </span>
+                    )}
+                    <span className="flex items-center gap-1.5">
+                      <Target className="w-4 h-4 text-brand-indigo" />
+                      {answeredQuestionsCount} Questions Evaluated
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                      Confidence:{' '}
+                      <span className="font-semibold text-text-primary">
+                        {reportData.confidence_rating || 'High'}
+                      </span>
+                    </span>
+                    {hasSpeakingAnalytics && (
+                      <span className="flex items-center gap-1.5">
+                        <MessageSquare className="w-4 h-4 text-amber-400" />
+                        Fillers Detected:{' '}
+                        <span className="font-semibold text-text-primary">
+                          {totalMeasuredFillers}
+                        </span>
+                      </span>
+                    )}
+                  </div>
+                </div>
 
             {/* Right: Score Circular Gauge */}
             <div className="flex-shrink-0 flex items-center justify-center">
@@ -1188,13 +1230,14 @@ export default function Report() {
           </div>
 
           <div className="space-y-3">
-            {(sessionMeta?.qaHistory || []).map((item, index) => {
-              const score = typeof item.score === 'number' ? item.score : (item.evaluation?.score ?? 70)
+            {(reportData?.per_question || sessionMeta?.qaHistory || []).map((item, index) => {
+              const isSkipped = Boolean(item.skipped)
+              const score = typeof item.score === 'number' ? item.score : null
               const isExpanded = expandedQuestion === index
 
-              const scoreColor = score >= 85 ? '#10B981' : score >= 70 ? '#6366F1' : score >= 40 ? '#F59E0B' : '#EF4444'
-              const scoreBg = score >= 85 ? 'rgba(16,185,129,0.15)' : score >= 70 ? 'rgba(99,102,241,0.15)' : score >= 40 ? 'rgba(245,158,11,0.15)' : 'rgba(239,68,68,0.15)'
-              const tierLabel = score >= 85 ? 'Excellent' : score >= 70 ? 'Good' : score >= 40 ? 'Partial' : 'Needs Work'
+              const scoreColor = isSkipped ? '#9CA3AF' : score >= 85 ? '#10B981' : score >= 70 ? '#6366F1' : score >= 40 ? '#F59E0B' : '#EF4444'
+              const scoreBg = isSkipped ? 'rgba(156,163,175,0.15)' : score >= 85 ? 'rgba(16,185,129,0.15)' : score >= 70 ? 'rgba(99,102,241,0.15)' : score >= 40 ? 'rgba(245,158,11,0.15)' : 'rgba(239,68,68,0.15)'
+              const tierLabel = isSkipped ? 'Skipped' : score >= 85 ? 'Excellent' : score >= 70 ? 'Good' : score >= 40 ? 'Partial' : 'Needs Work'
 
               return (
                 <div
@@ -1220,10 +1263,23 @@ export default function Report() {
                           {item.question}
                         </p>
                         <div className="flex items-center gap-2 mt-0.5">
-                          <span className="text-xs font-bold" style={{ color: scoreColor }}>
-                            {score}/100
-                          </span>
-                          <span className="text-[10px] text-text-muted">· {tierLabel}</span>
+                          {isSkipped ? (
+                            <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-surface border border-surface-border text-text-muted">
+                              Skipped
+                            </span>
+                          ) : (
+                            <>
+                              <span className="text-xs font-bold" style={{ color: scoreColor }}>
+                                {score}/100
+                              </span>
+                              <span className="text-[10px] text-text-muted">· {tierLabel}</span>
+                            </>
+                          )}
+                          {item.inputMode === 'voice' && !isSkipped && item.tooShort && (
+                            <span className="text-[10px] text-amber-400 font-medium px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20">
+                              Answer too short to analyze
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1244,78 +1300,97 @@ export default function Report() {
                       exit={{ opacity: 0, height: 0 }}
                       className="px-5 pb-5 pt-1 space-y-4 border-t border-surface-border text-xs"
                     >
-                      {/* Candidate Answer */}
-                      <div className="p-3.5 rounded-xl bg-surface-DEFAULT/60 border border-surface-border">
-                        <p className="font-semibold text-text-muted mb-1 flex items-center gap-1.5">
-                          <MessageSquare className="w-3.5 h-3.5 text-brand-indigo" /> Your Answer:
-                        </p>
-                        <p className="text-text-secondary leading-relaxed italic">
-                          "{item.answer || '[No speech recorded / Skipped]'}"
-                        </p>
-                      </div>
-
-                      {/* AI Detailed Feedback */}
-                      {item.feedback && (
-                        <div className="p-3.5 rounded-xl bg-surface border border-surface-border">
+                      {isSkipped ? (
+                        <div className="p-3.5 rounded-xl bg-surface-DEFAULT/60 border border-surface-border">
                           <p className="font-semibold text-text-muted mb-1 flex items-center gap-1.5">
-                            <CheckCircle2 className="w-3.5 h-3.5 text-brand-indigo" /> AI Assessment & Feedback:
+                            <MessageSquare className="w-3.5 h-3.5 text-text-muted" /> Question Status:
                           </p>
-                          <p className="text-text-primary leading-relaxed">{item.feedback}</p>
+                          <p className="text-text-secondary leading-relaxed italic">
+                            Skipped (This question was skipped and was excluded from the overall score, verdict, and skill radar).
+                          </p>
                         </div>
-                      )}
-
-                      {/* Strengths & Improvements tags */}
-                      {((item.strengths && item.strengths.length > 0) || (item.improvements && item.improvements.length > 0)) && (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                          {item.strengths && item.strengths.length > 0 && (
-                            <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-                              <p className="text-[11px] font-bold text-emerald-400 mb-1.5 flex items-center gap-1">
-                                <CheckCircle2 className="w-3 h-3" /> Answer Strengths
+                      ) : (
+                        <>
+                          {/* Candidate Answer */}
+                          <div className="p-3.5 rounded-xl bg-surface-DEFAULT/60 border border-surface-border">
+                            <p className="font-semibold text-text-muted mb-1 flex items-center gap-1.5">
+                              <MessageSquare className="w-3.5 h-3.5 text-brand-indigo" /> Your Answer:
+                            </p>
+                            <p className="text-text-secondary leading-relaxed italic">
+                              "{item.answer || '[No speech recorded]'}"
+                            </p>
+                            {item.inputMode === 'voice' && item.tooShort && (
+                              <p className="text-[11px] text-amber-400 mt-2 font-medium">
+                                Answer too short to analyze (under 8 seconds or 15 words).
                               </p>
-                              <ul className="space-y-1">
-                                {item.strengths.map((st, i) => (
-                                  <li key={i} className="text-[11px] text-text-secondary flex items-start gap-1.5">
-                                    <span className="w-1 h-1 rounded-full bg-emerald-400 mt-1.5 flex-shrink-0" />
-                                    <span>{st}</span>
-                                  </li>
-                                ))}
-                              </ul>
+                            )}
+                          </div>
+
+                          {/* AI Detailed Feedback */}
+                          {item.feedback && (
+                            <div className="p-3.5 rounded-xl bg-surface border border-surface-border">
+                              <p className="font-semibold text-text-muted mb-1 flex items-center gap-1.5">
+                                <CheckCircle2 className="w-3.5 h-3.5 text-brand-indigo" /> AI Assessment & Feedback:
+                              </p>
+                              <p className="text-text-primary leading-relaxed">{item.feedback}</p>
                             </div>
                           )}
-                          {item.improvements && item.improvements.length > 0 && (
-                            <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
-                              <p className="text-[11px] font-bold text-amber-400 mb-1.5 flex items-center gap-1">
-                                <AlertTriangle className="w-3 h-3" /> Areas to Improve
-                              </p>
-                              <ul className="space-y-1">
-                                {item.improvements.map((imp, i) => (
-                                  <li key={i} className="text-[11px] text-text-secondary flex items-start gap-1.5">
-                                    <span className="w-1 h-1 rounded-full bg-amber-400 mt-1.5 flex-shrink-0" />
-                                    <span>{imp}</span>
-                                  </li>
-                                ))}
-                              </ul>
+
+                          {/* Strengths & Improvements tags */}
+                          {((item.strengths && item.strengths.length > 0) || (item.improvements && item.improvements.length > 0)) && (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              {item.strengths && item.strengths.length > 0 && (
+                                <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                                  <p className="text-[11px] font-bold text-emerald-400 mb-1.5 flex items-center gap-1">
+                                    <CheckCircle2 className="w-3 h-3" /> Answer Strengths
+                                  </p>
+                                  <ul className="space-y-1">
+                                    {item.strengths.map((st, i) => (
+                                      <li key={i} className="text-[11px] text-text-secondary flex items-start gap-1.5">
+                                        <span className="w-1 h-1 rounded-full bg-emerald-400 mt-1.5 flex-shrink-0" />
+                                        <span>{st}</span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+                              {item.improvements && item.improvements.length > 0 && (
+                                <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
+                                  <p className="text-[11px] font-bold text-amber-400 mb-1.5 flex items-center gap-1">
+                                    <AlertTriangle className="w-3 h-3" /> Areas to Improve
+                                  </p>
+                                  <ul className="space-y-1">
+                                    {item.improvements.map((imp, i) => (
+                                      <li key={i} className="text-[11px] text-text-secondary flex items-start gap-1.5">
+                                        <span className="w-1 h-1 rounded-full bg-amber-400 mt-1.5 flex-shrink-0" />
+                                        <span>{imp}</span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
                             </div>
                           )}
-                        </div>
-                      )}
 
-                      {/* Suggested Ideal Answer */}
-                      <div
-                        className="p-3.5 rounded-xl"
-                        style={{
-                          background: 'rgba(99,102,241,0.08)',
-                          border: '1px solid rgba(99,102,241,0.2)',
-                        }}
-                      >
-                        <p className="font-semibold text-brand-indigo mb-1 flex items-center gap-1.5">
-                          <Sparkles className="w-3.5 h-3.5" /> Suggested Ideal Answer:
-                        </p>
-                        <p className="text-text-primary leading-relaxed">
-                          {item.ideal_answer ||
-                            'A strong answer directly defines the primary concepts, outlines real-world use cases, and explains performance trade-offs.'}
-                        </p>
-                      </div>
+                          {/* Suggested Ideal Answer */}
+                          {item.ideal_answer && (
+                            <div
+                              className="p-3.5 rounded-xl"
+                              style={{
+                                background: 'rgba(99,102,241,0.08)',
+                                border: '1px solid rgba(99,102,241,0.2)',
+                              }}
+                            >
+                              <p className="font-semibold text-brand-indigo mb-1 flex items-center gap-1.5">
+                                <Sparkles className="w-3.5 h-3.5" /> Suggested Ideal Answer:
+                              </p>
+                              <p className="text-text-primary leading-relaxed">
+                                {item.ideal_answer}
+                              </p>
+                            </div>
+                          )}
+                        </>
+                      )}
                     </motion.div>
                   )}
                 </div>
@@ -1407,6 +1482,8 @@ export default function Report() {
           </div>
         </div>
       </main>
+    )
+  })()}
     </div>
   )
 }
