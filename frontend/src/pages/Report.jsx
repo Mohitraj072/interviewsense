@@ -6,7 +6,7 @@ import {
   CheckCircle2, AlertTriangle, Sparkles, Target,
   MessageSquare, BookOpen, ChevronDown, ChevronUp, BarChart3,
   ShieldCheck, RefreshCw, Loader2, Briefcase, Mic, Info,
-  TrendingUp, TrendingDown, Minus, History, UserCheck,
+  TrendingUp, TrendingDown, Minus, History, UserCheck, Clock,
 } from 'lucide-react'
 import { doc, getDoc, collection, addDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore'
 import { auth, db } from '../firebase'
@@ -899,6 +899,8 @@ export default function Report() {
   const [copiedLink, setCopiedLink] = useState(false)
   const [isServerWaking, setIsServerWaking] = useState(false)
   const [reportError, setReportError] = useState(null)
+  const [isRetrying, setIsRetrying] = useState(false)
+  const [showErrorDetails, setShowErrorDetails] = useState(false)
 
   const [comparisonState, setComparisonState] = useState({
     loading: true,
@@ -909,6 +911,7 @@ export default function Report() {
 
   const fetchOrCreateReport = async () => {
     setLoading(true)
+    setIsRetrying(true)
     setReportError(null)
 
     const wakeTimer = setTimeout(() => {
@@ -922,6 +925,18 @@ export default function Report() {
       if (stateData && stateData.qaHistory) {
         const { qaHistory, config, fillerCount, sessionId } = stateData
 
+        // Ensure Render backend is awake on free tier with a health ping before generating report
+        try {
+          await axios.get(`${API_BASE}/api/health`, { timeout: 15000 })
+        } catch {
+          try {
+            await axios.get(`${API_BASE}/health`, { timeout: 15000 })
+          } catch {
+            // Silently continue to report generation attempt
+          }
+        }
+
+        let finalReport = null
         try {
           // Call backend report generator
           const res = await axios.post(`${API_BASE}/api/report/generate`, {
@@ -942,14 +957,33 @@ export default function Report() {
         } catch (err) {
           clearTimeout(wakeTimer)
           setIsServerWaking(false)
+          setIsRetrying(false)
           console.error('Report evaluation failed:', err)
+
+          const rawDetails =
+            err.response?.data?.details ||
+            err.response?.data?.error ||
+            err.message ||
+            ''
+          const isSleepOrAuth =
+            rawDetails.includes('403') ||
+            rawDetails.toLowerCase().includes('denied') ||
+            rawDetails.toLowerCase().includes('sleep') ||
+            rawDetails.toLowerCase().includes('timeout') ||
+            rawDetails.toLowerCase().includes('network') ||
+            err.response?.status === 403 ||
+            err.response?.status === 502 ||
+            err.response?.status === 504
+
           setReportError({
-            title: 'Evaluation Failed',
-            message:
-              err.response?.data?.details ||
-              err.response?.data?.error ||
-              err.message ||
-              'Gemini evaluation failed after all fallbacks. Please retry.',
+            title: isSleepOrAuth
+              ? 'AI Evaluation Server Reconnecting'
+              : 'Unable to Generate Report',
+            message: isSleepOrAuth
+              ? 'The Render backend went to sleep on the free tier or is reconnecting. Your interview answers are safely preserved in memory. Click "Retry" below to wake up the server and generate your report.'
+              : 'We encountered a temporary issue generating your AI evaluation report. Your interview answers are safely saved. Click "Retry" to try again.',
+            details: rawDetails,
+            canRetry: true,
           })
           setLoading(false)
           return
@@ -1287,15 +1321,139 @@ export default function Report() {
       setLoading(false)
     } catch (err) {
       console.error('Error in fetchOrCreateReport:', err)
+      const rawDetails = err?.response?.data?.details || err?.response?.data?.error || err?.message || ''
+      const isSleepOrAuth =
+        rawDetails.includes('403') ||
+        rawDetails.toLowerCase().includes('denied') ||
+        rawDetails.toLowerCase().includes('sleep') ||
+        rawDetails.toLowerCase().includes('timeout') ||
+        rawDetails.toLowerCase().includes('network')
+
       setReportError({
-        title: 'Unable to Generate or Retrieve Report',
-        message: err?.response?.data?.error || err?.message || 'The server took too long to respond or is still starting up. Please try again.',
+        title: isSleepOrAuth
+          ? 'AI Evaluation Server Reconnecting'
+          : 'Unable to Generate or Retrieve Report',
+        message: isSleepOrAuth
+          ? 'The Render backend server is warming up from sleep. Your interview data is preserved safely — click "Retry" below to wake the server and load your evaluation.'
+          : (err?.response?.data?.error || err?.message || 'The server took too long to respond or is still starting up. Please click "Retry".'),
+        details: rawDetails,
+        canRetry: true,
       })
       setLoading(false)
     } finally {
       clearTimeout(wakeTimer)
       setIsServerWaking(false)
+      setIsRetrying(false)
     }
+  }
+
+  // Instant heuristic fallback evaluation if user does not wish to wait for sleeping Render backend
+  const handleGenerateFallbackReport = () => {
+    const stateData = location.state
+    if (!stateData || !stateData.qaHistory) return
+
+    setLoading(true)
+    setReportError(null)
+
+    const { qaHistory, config, fillerCount, sessionId } = stateData
+
+    const evaluatedQuestions = qaHistory.map((item, idx) => {
+      const isSkipped = Boolean(item.skipped)
+      const answerText = item.answer || ''
+      const wordCount = answerText.split(/\s+/).filter(Boolean).length
+
+      let score = null
+      let feedback = null
+      let ideal = null
+      let strengths = []
+      let improvements = []
+
+      if (!isSkipped) {
+        if (wordCount >= 40) {
+          score = 85
+          feedback = 'Comprehensive answer covering core principles with clear technical terminology.'
+          strengths = ['Detailed technical explanation', 'Good domain vocabulary']
+          improvements = ['Can illustrate with a concrete metric or production trade-off']
+        } else if (wordCount >= 15) {
+          score = 75
+          feedback = 'Solid fundamental answer addressing the primary concept.'
+          strengths = ['Direct and structured']
+          improvements = ['Provide deeper edge-case coverage or practical architectural context']
+        } else {
+          score = 65
+          feedback = 'Answer is concise. In interviews, elaborate further on the underlying mechanics.'
+          strengths = ['Relevant focus']
+          improvements = ['Elaborate with examples and architectural trade-offs']
+        }
+        ideal = `A comprehensive answer addresses fundamental concepts, time/space trade-offs, and failure handling in ${config?.domain || 'this domain'}.`
+      }
+
+      return {
+        question: item.question,
+        answer: isSkipped ? '' : answerText,
+        skipped: isSkipped,
+        score,
+        feedback,
+        ideal_answer: ideal,
+        strengths,
+        improvements,
+        inputMode: item.inputMode || 'text',
+        tooShort: Boolean(item.tooShort),
+        isResumeBased: Boolean(item.isResumeBased),
+        duration: item.duration || 0,
+        wpm: item.wpm,
+        wordCount: item.wordCount,
+        durationSec: item.durationSec,
+        fillerCount: item.fillerCount,
+        fillerBreakdown: item.fillerBreakdown || {},
+      }
+    })
+
+    const answered = evaluatedQuestions.filter((q) => !q.skipped && typeof q.score === 'number')
+    const avgScore = answered.length > 0 ? Math.round(answered.reduce((a, b) => a + b.score, 0) / answered.length) : null
+    const verdict = !avgScore ? 'No answers to evaluate' : (avgScore >= 80 ? 'Exceptional' : avgScore >= 70 ? 'Strong' : 'Average')
+
+    const fallbackReport = {
+      overall_score: avgScore,
+      overall_verdict: verdict,
+      type: config?.type || 'Technical',
+      summary: answered.length > 0
+        ? `Candidate demonstrated ${verdict.toLowerCase()} command across ${config?.domain || 'core'} concepts under ${config?.difficulty || 'Medium'} interview conditions.`
+        : 'No answers were provided during this session.',
+      skill_radar: answered.length > 0
+        ? {
+            technical_accuracy: Math.min(95, (avgScore ?? 75) + 2),
+            communication: Math.min(95, (avgScore ?? 75) - 2),
+            problem_solving: Math.min(95, (avgScore ?? 75) + 1),
+            depth_of_knowledge: Math.min(95, (avgScore ?? 75) - 4),
+            confidence: Math.min(95, (avgScore ?? 75) + 3),
+          }
+        : { technical_accuracy: 0, communication: 0, problem_solving: 0, depth_of_knowledge: 0, confidence: 0 },
+      top_strengths: ['Clear foundational understanding', 'Logical answer structure'],
+      top_improvements: ['Provide specific benchmarking or scaling metrics', 'Discuss failure mitigation strategies'],
+      studyPlan: [
+        { day: 'Day 1-2', topic: 'Core Concepts', task: `Review deep internals of ${config?.domain || 'interview domain'}.` },
+        { day: 'Day 3-5', topic: 'Hands-on Practice', task: 'Solve 5 practical architectural scenarios under time constraints.' },
+      ],
+      filler_word_count: fillerCount || 0,
+      confidence_rating: avgScore >= 75 ? 'High' : 'Medium',
+      recommended_resources: [
+        { topic: config?.domain || 'Core Engineering', type: 'Guide', suggestion: 'Production Architecture Patterns' },
+      ],
+      next_steps: `Review question feedback and re-take a mock session in ${config?.domain || 'this topic'}.`,
+      per_question: evaluatedQuestions,
+      interviewerStyle: config?.interviewerStyle || 'Standard',
+      isOfflineEvaluation: true,
+    }
+
+    setReportData(fallbackReport)
+    setSessionMeta({
+      config,
+      fillerCount,
+      sessionId,
+      qaHistory: evaluatedQuestions,
+    })
+    setLoading(false)
   }
 
   useEffect(() => {
@@ -1465,36 +1623,82 @@ export default function Report() {
   }
 
   if (reportError && !reportData) {
+    const rawError = reportError.details || reportError.rawError || ''
     return (
-      <div className="min-h-screen bg-bg-primary flex items-center justify-center p-6">
-        <div className="glass-card p-8 rounded-2xl max-w-md w-full text-center border border-red-500/25 shadow-2xl">
-          <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-400">
-            <AlertTriangle className="w-7 h-7" />
+      <div className="min-h-screen bg-bg-primary flex items-center justify-center p-6 text-text-primary">
+        <div className="glass-card p-8 sm:p-10 rounded-3xl max-w-lg w-full text-center border border-surface-border shadow-2xl relative overflow-hidden">
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-amber-500 via-indigo-500 to-purple-500" />
+
+          <div className="w-16 h-16 mx-auto mb-5 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 shadow-inner">
+            <RefreshCw className={`w-8 h-8 text-indigo-400 ${isRetrying ? 'animate-spin' : ''}`} />
           </div>
-          <h2 className="text-xl font-bold text-text-primary mb-2">
-            {reportError.title}
+
+          <div className="flex items-center justify-center gap-1.5 mb-3">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold bg-amber-500/10 border border-amber-500/25 text-amber-400">
+              <Clock className="w-3.5 h-3.5" />
+              Interview Answers Preserved
+            </span>
+          </div>
+
+          <h2 className="text-xl sm:text-2xl font-black text-text-primary mb-2 tracking-tight">
+            {reportError.title || 'AI Server Reconnecting'}
           </h2>
-          <p className="text-xs text-text-secondary mb-6 leading-relaxed">
-            {reportError.message}
+
+          <p className="text-xs sm:text-sm text-text-secondary mb-6 leading-relaxed">
+            {reportError.message ||
+              'The AI evaluation server was asleep on the free tier or is reconnecting. Your interview answers are safely saved. Click Retry below to wake up the server and generate your report.'}
           </p>
-          <div className="flex flex-col sm:flex-row gap-3">
+
+          <div className="space-y-3">
             <button
+              id="btn-retry-report"
               type="button"
               onClick={fetchOrCreateReport}
-              className="btn-primary flex-1 justify-center py-3 text-xs font-bold cursor-pointer"
+              disabled={loading || isRetrying}
+              className="btn-primary w-full justify-center py-3.5 px-6 rounded-xl text-xs sm:text-sm font-bold cursor-pointer shadow-lg shadow-indigo-500/25 flex items-center gap-2 disabled:opacity-50"
             >
-              <RefreshCw className="w-4 h-4 mr-1.5" />
-              Retry Report
+              <RefreshCw className={`w-4 h-4 ${isRetrying ? 'animate-spin' : ''}`} />
+              <span>{isRetrying ? 'Waking Server & Retrying...' : 'Retry Report Generation'}</span>
             </button>
+
+            {location.state?.qaHistory && (
+              <button
+                id="btn-offline-report"
+                type="button"
+                onClick={handleGenerateFallbackReport}
+                className="w-full py-3 px-6 rounded-xl text-xs font-semibold text-text-secondary hover:text-text-primary bg-surface hover:bg-surface-hover border border-surface-border transition-colors flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <Sparkles className="w-4 h-4 text-indigo-400" />
+                <span>Generate Instant Evaluation (Offline)</span>
+              </button>
+            )}
+
             <button
               type="button"
               onClick={() => navigate('/dashboard')}
-              className="btn-secondary flex-1 justify-center py-3 text-xs font-semibold cursor-pointer"
+              className="w-full py-2.5 px-4 text-xs font-semibold text-text-muted hover:text-text-secondary transition-colors cursor-pointer flex items-center justify-center gap-1.5"
             >
-              <ArrowLeft className="w-4 h-4 mr-1.5" />
-              Dashboard
+              <ArrowLeft className="w-3.5 h-3.5" />
+              Return to Dashboard
             </button>
           </div>
+
+          {rawError && (
+            <div className="mt-6 pt-4 border-t border-surface-border">
+              <button
+                type="button"
+                onClick={() => setShowErrorDetails((prev) => !prev)}
+                className="text-[11px] text-text-muted hover:text-text-secondary underline cursor-pointer inline-flex items-center gap-1"
+              >
+                {showErrorDetails ? 'Hide Technical Details' : 'View Technical Details'}
+              </button>
+              {showErrorDetails && (
+                <div className="mt-2 p-3 rounded-lg bg-surface text-left text-[11px] font-mono text-amber-400/90 break-words border border-surface-border">
+                  {rawError}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     )

@@ -379,9 +379,26 @@ export default function Interview() {
   const [timePerQuestion, setTimePerQuestion] = useState(120) // in seconds: 0 | 60 | 120 | 180. Default: 2 minutes (120)
   const [timeLeft, setTimeLeft] = useState(120) // countdown in seconds
   const [loadingQuestions, setLoadingQuestions] = useState(false)
+  const [isConnectingToAi, setIsConnectingToAi] = useState(false)
   const [isServerWaking, setIsServerWaking] = useState(false)
   const [setupError, setSetupError] = useState('')
   const [apiError, setApiError] = useState(null)
+
+  // Keep-alive ping on Interview page mount to wake up sleeping Render backend instance early
+  useEffect(() => {
+    const pingHealth = async () => {
+      try {
+        await axios.get(`${API_BASE}/api/health`, { timeout: 10000 })
+      } catch {
+        try {
+          await axios.get(`${API_BASE}/health`, { timeout: 10000 })
+        } catch {
+          // Ignore background ping errors on initial page load
+        }
+      }
+    }
+    pingHealth()
+  }, [])
 
   // Job Description states
   const [jobDescription, setJobDescription] = useState('')
@@ -549,6 +566,19 @@ export default function Interview() {
     resetTranscript,
   } = useSpeechRecognition()
 
+  // Keep Render server awake during interview with periodic ping every 3 minutes
+  useEffect(() => {
+    if (stage !== 'interview') return
+    const pingInterval = setInterval(async () => {
+      try {
+        await axios.get(`${API_BASE}/api/health`, { timeout: 8000 })
+      } catch {
+        // Silently ignore periodic ping errors
+      }
+    }, 180000)
+    return () => clearInterval(pingInterval)
+  }, [stage])
+
   // Live elapsed timer
   useEffect(() => {
     let interval = null
@@ -634,8 +664,28 @@ export default function Interview() {
   // Start interview handler
   const handleStartInterview = async (overrideParams) => {
     setLoadingQuestions(true)
+    setIsConnectingToAi(true)
     setSetupError('')
     setApiError(null)
+
+    // Send a GET request to the backend /api/health endpoint to wake up the Render server before the interview starts
+    const healthStartTime = Date.now()
+    try {
+      await axios.get(`${API_BASE}/api/health`, { timeout: 20000 })
+    } catch {
+      try {
+        await axios.get(`${API_BASE}/health`, { timeout: 20000 })
+      } catch (healthErr) {
+        console.warn('Backend health ping failed or timed out:', healthErr)
+      }
+    }
+
+    // Show a small "Connecting to AI..." loading state for 2-3 seconds if backend is waking up
+    const elapsed = Date.now() - healthStartTime
+    if (elapsed < 2500) {
+      await new Promise((resolve) => setTimeout(resolve, 2500 - elapsed))
+    }
+    setIsConnectingToAi(false)
 
     const wakeTimer = setTimeout(() => {
       setIsServerWaking(true)
@@ -709,6 +759,7 @@ export default function Interview() {
         })
       } finally {
         clearTimeout(wakeTimer)
+        setIsConnectingToAi(false)
         setIsServerWaking(false)
         setLoadingQuestions(false)
       }
@@ -796,6 +847,7 @@ export default function Interview() {
       })
     } finally {
       clearTimeout(wakeTimer)
+      setIsConnectingToAi(false)
       setIsServerWaking(false)
       setLoadingQuestions(false)
     }
@@ -1576,6 +1628,12 @@ export default function Interview() {
 
             {/* Launch Button */}
             <div className="pt-2">
+              {isConnectingToAi && (
+                <div className="flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-indigo-500/10 border border-indigo-500/25 text-indigo-300 text-xs font-semibold mb-3">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-400" />
+                  <span>Connecting to AI... Warming up server before interview starts</span>
+                </div>
+              )}
               <button
                 id="btn-start-interview"
                 type="button"
@@ -1587,7 +1645,9 @@ export default function Interview() {
                   <div className="flex items-center gap-2.5">
                     <Loader2 className="w-5 h-5 animate-spin flex-shrink-0" />
                     <span>
-                      {isServerWaking
+                      {isConnectingToAi
+                        ? 'Connecting to AI...'
+                        : isServerWaking
                         ? 'Waking up the interview server... this can take up to a minute on first visit'
                         : weakSpots || interviewType === 'Weak-spot practice'
                         ? 'Generating Targeted Weak-Spot Questions...'
