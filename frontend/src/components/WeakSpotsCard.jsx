@@ -27,7 +27,7 @@ const CATEGORY_DEFINITIONS = [
   { key: 'confidence', label: 'Confidence' },
 ]
 
-export default function WeakSpotsCard({ onStartNewInterview, className = '' }) {
+export default function WeakSpotsCard({ onStartNewInterview, onStartFocusedPractice, className = '' }) {
   const navigate = useNavigate()
   const { user } = useAuth()
 
@@ -182,17 +182,24 @@ export default function WeakSpotsCard({ onStartNewInterview, className = '' }) {
   }, [analysis.isUnlocked, analysis.mostRecentDomain, analysis.mostRecentDifficulty])
 
   const handleStartFocusedPractice = () => {
-    navigate('/interview', {
-      state: {
-        autoStart: true,
-        type: 'Weak-spot practice',
-        domain: selectedDomain,
-        difficulty: selectedDifficulty,
-        weakSpots: {
-          categories: analysis.weakCategories.map((c) => c.label),
-          sampleQuestions: analysis.lowestQuestions.map((q) => q.question.slice(0, 300)),
-        },
+    const practiceState = {
+      autoStart: true,
+      type: 'Weak-spot practice',
+      domain: selectedDomain,
+      difficulty: selectedDifficulty,
+      weakSpots: {
+        categories: analysis.weakCategories.map((c) => c.label),
+        sampleQuestions: analysis.lowestQuestions.map((q) => q.question.slice(0, 300)),
       },
+    }
+
+    if (onStartFocusedPractice) {
+      onStartFocusedPractice(practiceState)
+      return
+    }
+
+    navigate('/interview', {
+      state: practiceState,
     })
   }
 

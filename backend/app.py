@@ -9,6 +9,8 @@ from utils import (
     sanitize_resume_text,
     validate_interviewer_style,
 )
+from prompts.templates import get_company_style_prompt
+from routes.interview import CURATED_COMPANY_QUESTIONS
 
 # Load env vars
 load_dotenv()
@@ -392,6 +394,9 @@ def create_app():
         raw_style = data.get("interviewerStyle") or data.get("interviewer_style")
         interviewer_style = validate_interviewer_style(raw_style)
 
+        company = (data.get("company") or data.get("selectedCompany") or "").strip()
+        company_prompt = f"\nCompany Interview Style:\n{get_company_style_prompt(company)}\n" if company else ""
+
         STYLE_DIRECTIVES = {
             "Friendly coach": "Interviewer Persona: Friendly coach. Tone is warm, empathetic, and encouraging. Frame questions helpfully, inviting the candidate to demonstrate their thinking with gentle scaffolding.",
             "Standard": "Interviewer Persona: Standard. Tone is balanced, objective, and professional matching industry standards.",
@@ -527,20 +532,25 @@ Example:
   "questions": ["Question 1?", "Question 2?", "Question 3?"]
 }}"""
                 else:
-                    prompt = f"""You are a senior technical interviewer at Google.
+                    prompt = f"""You are a senior technical interviewer conducting a mock interview.
 Generate exactly {count} distinct, professional interview questions for:
 - Interview Type: {interview_type}
 - Domain: {domain}
 - Difficulty Level: {difficulty}
 - {style_prompt_text}
-
+{f"- Target Company: {company}" if company else ""}
+{company_prompt}
 Rules:
 1. Adopt the {interviewer_style} interviewer persona ({style_prompt_text}).
 2. Each question must be clear, realistic, and calibrated to {domain} ({difficulty} difficulty).
 {rapid_fire_rule}
-3. Return ONLY a valid JSON array of strings. Do NOT wrap in markdown codeblocks (no ```json).
+3. If a target company is specified, tailor questions strictly in that company's signature interview style.
+4. Return ONLY a valid JSON array of strings. Do NOT wrap in markdown codeblocks (no ```json).
 Example:
 ["Question 1?", "Question 2?", "Question 3?"]"""
+
+                if company:
+                    prompt += f"\nGenerate questions specifically styled for {company} interviews."
 
                 response, used_model = generate_content_with_fallback(prompt)
 
@@ -592,6 +602,7 @@ Example:
                         "model": used_model,
                         "count": len(questions[:count]),
                         "type": "Weak-spot practice" if has_weak_spots else (interview_type if not has_resume else "Resume-Based"),
+                        "company": company if company else None,
                         "interviewerStyle": interviewer_style,
                         "hasJobDescription": has_jd,
                         "jobTitle": extracted_job_title[:60] if (has_jd or extracted_job_title) else "",
@@ -602,6 +613,19 @@ Example:
                     })
             except Exception as e:
                 print(f"Gemini question generation error: {e}, falling back to curated catalog")
+
+        # Fallback to curated company catalog if company specified
+        comp_key = company.strip().capitalize() if company else None
+        if comp_key and comp_key in CURATED_COMPANY_QUESTIONS:
+            return jsonify({
+                "questions": CURATED_COMPANY_QUESTIONS[comp_key][:count],
+                "source": "curated",
+                "count": len(CURATED_COMPANY_QUESTIONS[comp_key][:count]),
+                "type": interview_type,
+                "company": comp_key,
+                "domain": domain,
+                "difficulty": difficulty,
+            })
 
         # Fallback to curated catalog
         domain_catalog = FALLBACK_QUESTIONS.get(domain, FALLBACK_QUESTIONS["DSA"])

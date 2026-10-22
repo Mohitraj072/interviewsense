@@ -19,8 +19,55 @@ from prompts.templates import (
     build_evaluation_prompt,
     build_resume_question_prompt,
     build_follow_up_prompt,
+    get_company_style_prompt,
 )
 from utils import validate_interviewer_style
+
+# Curated company questions fallback for when AI model is offline or rate-limited
+CURATED_COMPANY_QUESTIONS = {
+    "Google": [
+        "Given a stream of integers, design an algorithm to find the median dynamically with optimal runtime and space complexity.",
+        "Design a globally distributed key-value store. How would you handle clock synchronization, consensus, and multi-region replication?",
+        "Describe a situation where you encountered ambiguous technical specifications. How did you align the team and drive consensus?",
+        "Given a large directed graph of web pages, how would you design a distributed crawler to discover and index pages without getting trapped in cycles?",
+        "Explain how you would optimize a search query autocomplete system serving 100,000 queries per second with sub-50ms latency.",
+    ],
+    "Amazon": [
+        "Tell me about a time you had to make a high-stakes decision without all the data you needed. How did you exhibit 'Bias for Action'?",
+        "Design an inventory management service for Prime Day flash sales that guarantees zero overselling under extreme write concurrency.",
+        "Describe an instance where you had to 'Disagree and Commit' on an architectural direction. How did you handle the outcome?",
+        "Given a distributed storage engine like DynamoDB, explain partition key distribution, read/write repair, and how eventual consistency is managed.",
+        "Give an example of a time when Customer Obsession led you to challenge an existing engineering practice.",
+    ],
+    "Microsoft": [
+        "Walk me through how you would architect a real-time collaborative document editing service with operational transformations and conflict resolution.",
+        "Describe a difficult technical problem you solved where you had to balance backward compatibility with modern software design.",
+        "How would you design a robust telemetry and crash analytics pipeline ingesting events from hundreds of millions of client machines?",
+        "Tell me about a time you mentored a teammate or helped resolve an architectural disagreement to build an inclusive engineering culture.",
+        "Implement an algorithm to detect and resolve deadlocks in a multi-threaded resource allocation graph.",
+    ],
+    "Meta": [
+        "Design the backend architecture for Instagram / Facebook Stories, ensuring ultra-low latency media upload, real-time fan-out, and 24-hour expiration.",
+        "Given a massive social graph, write an efficient bidirectional BFS algorithm to find the shortest degree of separation between two users.",
+        "How would you design a high-throughput rate limiter and anti-scraping system capable of processing billions of API calls per second?",
+        "Tell me about a time you moved fast to ship a critical feature, identified performance regressions in production, and refactored under tight deadlines.",
+        "How would you architect a distributed caching tier with write-through/cache-aside patterns and minimize thundering herd problems?",
+    ],
+    "Flipkart": [
+        "Design the checkout and flash sale ordering system for Big Billion Days. How do you guarantee inventory idempotency and prevent stock leakages under heavy load?",
+        "Given a continuous real-time stream of product search queries, design an efficient algorithm to compute the top-K trending items over a sliding window.",
+        "How would you design a machine-coding LLD for an e-commerce shopping cart and coupon engine following SOLID principles and design patterns?",
+        "Describe a scenario where technical constraints forced you to rethink a product feature to optimize user conversion and seller trust.",
+        "Architect a warehouse fulfillment and delivery slot allocation system that minimizes logistics cost and meets strict SLA delivery guarantees.",
+    ],
+    "Infosys": [
+        "Explain core OOP principles—Inheritance, Polymorphism, Abstraction, and Encapsulation—with a practical enterprise banking service example.",
+        "Solve this quantitative reasoning problem: A train running at 54 km/hr takes 20 seconds to pass a platform. Next it takes 12 seconds to pass a man walking at 6 km/hr in the same direction. Find the length of the train and the platform.",
+        "Explain database normalization from 1NF to BCNF, clustered vs non-clustered indexing, and the four ACID properties in relational databases.",
+        "Describe a situation where you had to quickly learn an unfamiliar technology stack to meet a critical project milestone. How did you manage your learning curve?",
+        "Explain the differences between processes and threads, inter-process communication mechanisms, and how deadlocks can be prevented.",
+    ],
+}
 
 interview_bp = Blueprint("interview", __name__)
 
@@ -85,6 +132,7 @@ def start_interview():
     try:
         raw_jd = data.get("jobDescription") or data.get("job_description") or ""
         job_description = str(raw_jd).strip()[:4000] if raw_jd else ""
+        company = (data.get("company") or data.get("selectedCompany") or "").strip()
 
         prompt = build_question_prompt(
             interview_type=data["type"],
@@ -96,7 +144,11 @@ def start_interview():
             total_questions=10,
             previous_questions=[],
             job_description=job_description,
+            company=company,
         )
+
+        if company:
+            prompt += f"\nGenerate questions specifically styled for {company} interviews."
 
         response = generate_content_with_fallback(prompt)
         question_text = response.text.strip()
@@ -109,6 +161,7 @@ def start_interview():
             "domain": data["domain"],
             "difficulty": data["difficulty"],
             "hasJobDescription": bool(job_description),
+            "company": company if company else None,
         })
 
     except Exception as e:
@@ -309,6 +362,7 @@ def next_question():
                 "isComplete": True,
             })
 
+        company = (data.get("company") or data.get("selectedCompany") or "").strip()
         next_q_prompt = build_question_prompt(
             interview_type="Technical",
             difficulty=data.get("difficulty", "Medium"),
@@ -318,6 +372,7 @@ def next_question():
             question_number=next_q_number,
             total_questions=total,
             previous_questions=data.get("previousQuestions", []),
+            company=company,
         )
         next_q_response = generate_content_with_fallback(next_q_prompt)
 
@@ -328,10 +383,134 @@ def next_question():
             "question": next_q_response.text.strip(),
             "evaluation": evaluation,
             "isComplete": False,
+            "company": company if company else None,
         })
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+
+@interview_bp.route("/questions", methods=["POST"])
+def get_company_interview_questions():
+    """
+    POST /api/interview/questions
+    Generate interview questions according to configuration, with support for Company Mode.
+    Expected body:
+    {
+      "company": "Google" | "Amazon" | "Microsoft" | "Meta" | "Flipkart" | "Infosys" (optional),
+      "type": "Technical" | "HR" | "Mixed" | "Weak-spot practice",
+      "domain": "DSA" | "Web Dev" | "OS" | "DBMS" | "System Design" | "OOPs",
+      "difficulty": "Easy" | "Medium" | "Hard",
+      "count": 5,
+      "jobDescription": "...",
+      "resumeText": "...",
+      "interviewerStyle": "Standard"
+    }
+    """
+    data = request.get_json() or {}
+    company = (data.get("company") or data.get("selectedCompany") or "").strip()
+    interview_type = data.get("type", "Technical")
+    domain = data.get("domain", "DSA")
+    difficulty = data.get("difficulty", "Medium")
+    try:
+        count = int(data.get("count", 5))
+    except (ValueError, TypeError):
+        count = 5
+    count = max(1, min(15, count))
+
+    raw_jd = data.get("jobDescription") or data.get("job_description") or ""
+    job_description = str(raw_jd).strip()[:4000] if raw_jd else ""
+
+    raw_resume = data.get("resumeText") or data.get("resume_text") or ""
+    resume_text = str(raw_resume).strip()[:6000] if raw_resume else ""
+
+    raw_style = data.get("interviewerStyle") or data.get("interviewer_style")
+    interviewer_style = validate_interviewer_style(raw_style)
+
+    company_instruction = ""
+    if company:
+        company_instruction = get_company_style_prompt(company)
+
+    api_key = os.getenv("GEMINI_API_KEY")
+    if api_key and not api_key.startswith("your_"):
+        try:
+            company_block = f"\n{company_instruction}\n" if company_instruction else ""
+            jd_block = f"\nTarget Job Description:\n{job_description}\n" if job_description else ""
+            resume_block = f"\nCandidate Profile Context:\n{resume_text}\n" if resume_text else ""
+
+            prompt = f"""You are a senior hiring interviewer at a leading technology firm conducting a {interview_type} mock interview.
+Generate exactly {count} distinct, professional interview questions adhering strictly to the candidate configuration:
+- Interview Type: {interview_type}
+- Domain: {domain}
+- Difficulty: {difficulty}
+- Interviewer Persona: {interviewer_style}
+{f"- Target Company: {company}" if company else ""}
+{company_block}
+{jd_block}
+{resume_block}
+Rules:
+1. Generate exactly {count} realistic, challenging interview questions.
+2. If a target company is specified, tailor questions strictly in that company's signature interview style.
+3. Return ONLY a valid JSON array of strings (e.g. ["Question 1?", "Question 2?"]). Do NOT include markdown code blocks or explanatory text.
+"""
+            if company:
+                prompt += f"\nGenerate questions specifically styled for {company} interviews."
+
+            res = generate_content_with_fallback(prompt)
+            raw = res.text.strip()
+            clean_json = re.sub(r"^```(?:json)?\s*", "", raw, flags=re.MULTILINE)
+            clean_json = re.sub(r"\s*```$", "", clean_json, flags=re.MULTILINE).strip()
+            parsed = json.loads(clean_json)
+
+            if isinstance(parsed, list) and len(parsed) > 0:
+                questions_list = [str(q).strip() for q in parsed if str(q).strip()][:count]
+                return jsonify({
+                    "status": "success",
+                    "company": company if company else None,
+                    "questions": questions_list,
+                    "domain": domain,
+                    "difficulty": difficulty,
+                    "count": len(questions_list),
+                })
+            elif isinstance(parsed, dict) and "questions" in parsed:
+                raw_list = parsed["questions"]
+                questions_list = [
+                    (q.get("question") if isinstance(q, dict) else str(q)).strip()
+                    for q in raw_list
+                ][:count]
+                return jsonify({
+                    "status": "success",
+                    "company": company if company else None,
+                    "questions": questions_list,
+                    "domain": domain,
+                    "difficulty": difficulty,
+                    "count": len(questions_list),
+                })
+        except Exception as err:
+            print(f"[Gemini Company Questions] Generation failed: {err}. Using curated questions.")
+
+    # Fallback curated questions if Gemini is unavailable or failed
+    comp_key = company.strip().capitalize() if company else None
+    if comp_key and comp_key in CURATED_COMPANY_QUESTIONS:
+        curated = CURATED_COMPANY_QUESTIONS[comp_key][:count]
+    else:
+        curated = [
+            f"Explain the core mechanisms, design patterns, and fundamental trade-offs in {domain}.",
+            f"What are the primary performance bottlenecks encountered in {domain} applications and how do you diagnose them?",
+            f"Walk me through a challenging engineering problem you solved in {domain}. What architecture choices did you make?",
+            f"How do you ensure reliability, error handling, and testability when writing code in {domain}?",
+            f"Explain how you evaluate time and space complexity tradeoffs for mission-critical operations in {domain}.",
+        ][:count]
+
+    return jsonify({
+        "status": "success",
+        "company": company if company else None,
+        "questions": curated,
+        "domain": domain,
+        "difficulty": difficulty,
+        "count": len(curated),
+    })
 
 
 @interview_bp.route("/end", methods=["POST"])

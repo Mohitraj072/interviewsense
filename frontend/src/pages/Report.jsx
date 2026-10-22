@@ -6,12 +6,13 @@ import {
   CheckCircle2, AlertTriangle, Sparkles, Target,
   MessageSquare, BookOpen, ChevronDown, ChevronUp, BarChart3,
   ShieldCheck, RefreshCw, Loader2, Briefcase, Mic, Info,
-  TrendingUp, TrendingDown, Minus, History, UserCheck, Clock,
+  TrendingUp, TrendingDown, Minus, History, UserCheck, Clock, Building2,
 } from 'lucide-react'
 import { doc, getDoc, collection, addDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore'
 import { auth, db } from '../firebase'
 import { useAuth } from '../context/AuthContext'
 import ThemeToggle from '../components/ThemeToggle'
+import CompanyReadinessScore from '../components/CompanyReadinessScore'
 import axios from 'axios'
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000'
@@ -924,6 +925,7 @@ export default function Report() {
       // 1. If passed from Interview completion
       if (stateData && stateData.qaHistory) {
         const { qaHistory, config, fillerCount, sessionId } = stateData
+        const targetCompany = config?.company || stateData?.company || stateData?.config?.company || null
 
         // Ensure Render backend is awake on free tier with a health ping before generating report
         try {
@@ -1051,6 +1053,7 @@ export default function Report() {
 
         const completedReport = {
           ...(finalReport || {}),
+          company: targetCompany,
           overall_score: overallScore,
           overall_verdict: overallVerdict,
           type: config?.type || 'Technical',
@@ -1086,7 +1089,7 @@ export default function Report() {
 
         setReportData(completedReport)
         setSessionMeta({
-          config,
+          config: { ...(config || {}), company: targetCompany },
           fillerCount,
           sessionId,
           qaHistory: finalQuestions,
@@ -1138,6 +1141,9 @@ export default function Report() {
               improvements: completedReport.top_improvements,
               studyPlan: completedReport.studyPlan,
               createdAt: serverTimestamp(),
+            }
+            if (targetCompany) {
+              reportDoc.company = targetCompany
             }
             if (config?.hasJobDescription || config?.jobTitle) {
               reportDoc.hasJobDescription = true
@@ -1202,6 +1208,7 @@ export default function Report() {
             })
 
             setReportData({
+              company: data.company || null,
               overall_score: avgScore,
               overall_verdict: verdict,
               type: data.type || 'Technical',
@@ -1789,6 +1796,7 @@ export default function Report() {
         )
         const hasSpeakingAnalytics = measuredVoiceItems.length > 0
         const totalMeasuredFillers = measuredVoiceItems.reduce((sum, q) => sum + (q.fillerCount || 0), 0)
+        const company = sessionMeta?.config?.company || reportData?.company || location.state?.company || location.state?.config?.company || null
 
         return (
           <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-8">
@@ -1809,6 +1817,12 @@ export default function Report() {
                     <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-brand-indigo/10 border border-brand-indigo/30 text-brand-indigo">
                       <Sparkles className="w-3.5 h-3.5" /> Interview Performance Report
                     </div>
+                    {company && (
+                      <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-indigo-500/15 border border-indigo-500/30 text-indigo-300">
+                        <Building2 className="w-3.5 h-3.5 text-indigo-400" />
+                        Target: <strong className="text-text-primary">{company}</strong>
+                      </div>
+                    )}
                     {(sessionMeta?.config?.interviewerStyle || reportData?.interviewerStyle) && (
                       <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-brand-indigo/10 border border-brand-indigo/25 text-brand-indigo">
                         <UserCheck className="w-3.5 h-3.5" /> Style: <strong className="text-text-primary">{sessionMeta?.config?.interviewerStyle || reportData?.interviewerStyle}</strong>
@@ -1866,6 +1880,15 @@ export default function Report() {
             </div>
           </div>
         </motion.div>
+
+        {/* Company Readiness Score Badge & Card (if company mode was used) */}
+        {company && (
+          <CompanyReadinessScore
+            companyId={company}
+            overallScore={reportData?.overall_score}
+            answeredCount={answeredQuestionsCount}
+          />
+        )}
 
         {/* Previous Attempt Comparison Card */}
         {comparisonState.visible && (

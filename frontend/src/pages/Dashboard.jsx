@@ -945,6 +945,18 @@ export default function Dashboard() {
     setShowNewInterview(false)
   }
 
+  const handleStartFocusedPractice = (practiceConfig) => {
+    navigate('/interview', {
+      state: {
+        autoStart: true,
+        type: 'Weak-spot practice',
+        domain: practiceConfig?.domain || 'DSA',
+        difficulty: practiceConfig?.difficulty || 'Medium',
+        weakSpots: practiceConfig?.weakSpots || null,
+      },
+    })
+  }
+
   // Calculate consecutive days streak from reports
   const calculateStreak = (reportsList) => {
     if (!reportsList || reportsList.length === 0) return 0
@@ -1196,7 +1208,10 @@ export default function Dashboard() {
 
           {/* Practice my weak spots card */}
           <div className="mb-6">
-            <WeakSpotsCard onStartNewInterview={() => setShowNewInterview(true)} />
+            <WeakSpotsCard
+              onStartFocusedPractice={handleStartFocusedPractice}
+              onStartNewInterview={() => setShowNewInterview(true)}
+            />
           </div>
 
           {/* Main grid */}

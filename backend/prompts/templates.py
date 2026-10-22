@@ -9,6 +9,23 @@ interview-quality output from Gemini 1.5 Pro.
 from utils import validate_interviewer_style
 
 
+def get_company_style_prompt(company: str) -> str:
+    """
+    Format prompt guidance specifically tailored to target company interview styles.
+    """
+    if not company:
+        return ""
+    comp = str(company).strip()
+    comp_norm = comp.capitalize()
+    return f"""Generate questions specifically in the style of {comp_norm} interviews. 
+For Google: focus on algorithms and system design.
+For Amazon: include Leadership Principles behavioral questions.
+For Microsoft: mix problem-solving and culture questions.
+For Meta: focus on coding efficiency and scale.
+For Flipkart: include product thinking and DSA.
+For Infosys: include aptitude and fundamental concepts."""
+
+
 def build_question_prompt(
     interview_type: str,
     difficulty: str,
@@ -19,10 +36,11 @@ def build_question_prompt(
     total_questions: int,
     previous_questions: list[str],
     job_description: str = "",
+    company: str = "",
 ) -> str:
     """
     Generate a prompt to produce a single interview question.
-    Avoids repeating previous questions and optionally tailors to job description.
+    Avoids repeating previous questions and optionally tailors to job description and company style.
     """
     prev_q_block = ""
     if previous_questions:
@@ -48,6 +66,13 @@ Tailoring requirement:
 Anchor this question in the core skills, tools, frameworks, and responsibilities highlighted in the job description while matching the {difficulty} difficulty and {domain} domain.
 """
 
+    company_block = ""
+    if company:
+        company_block = f"""
+Company Interview Style Directive:
+{get_company_style_prompt(company)}
+"""
+
     difficulty_guidance = {
         "Easy": "suitable for freshers and entry-level candidates, testing basic concepts",
         "Medium": "suitable for 2-4 years experience, testing applied knowledge and depth",
@@ -60,6 +85,8 @@ Anchor this question in the core skills, tools, frameworks, and responsibilities
         "Mixed": f"Alternate between {domain} technical depth and behavioral/situational HR questions.",
     }.get(interview_type, f"Focus on {domain} technical concepts.")
 
+    company_context_line = f"- Target Company: {company.strip()}" if company else ""
+
     return f"""You are an expert technical interviewer at a top-tier tech company conducting a {interview_type} interview.
 
 Interview Context:
@@ -69,8 +96,10 @@ Interview Context:
 - Difficulty: {difficulty} ({difficulty_guidance})
 - Interview Type: {interview_type}
 - Question Number: {question_number} of {total_questions}
+{company_context_line}
 
 {type_guidance}
+{company_block}
 {jd_block}
 {prev_q_block}
 

@@ -33,12 +33,24 @@ import {
   UserCheck,
   Flame,
   Zap,
+  Building2,
+  Target,
 } from 'lucide-react'
 import axios from 'axios'
 import { useAuth } from '../context/AuthContext'
 import ThemeToggle from '../components/ThemeToggle'
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000'
+
+// ── Companies list for Company Mode ──────────────────────────────────────────
+const companies = [
+  { id: 'google', name: 'Google', emoji: '🔵', focus: 'Algorithms & System Design' },
+  { id: 'amazon', name: 'Amazon', emoji: '🟠', focus: 'Leadership Principles & DSA' },
+  { id: 'microsoft', name: 'Microsoft', emoji: '🟢', focus: 'Problem Solving & Culture' },
+  { id: 'meta', name: 'Meta', emoji: '🔵', focus: 'Coding at Scale' },
+  { id: 'flipkart', name: 'Flipkart', emoji: '🟡', focus: 'Product & DSA' },
+  { id: 'infosys', name: 'Infosys', emoji: '💜', focus: 'Fundamentals & Aptitude' },
+]
 
 // ── Domains list ──────────────────────────────────────────────────────────────
 const DOMAINS = [
@@ -416,6 +428,13 @@ export default function Interview() {
   // Weak-spot practice states
   const [weakSpots, setWeakSpots] = useState(incomingState?.weakSpots || null)
 
+  // Company Mode state
+  const [selectedCompany, setSelectedCompany] = useState(null)
+  const selectedCompanyObj = companies.find(
+    (c) => c.id === selectedCompany || c.name.toLowerCase() === String(selectedCompany || '').toLowerCase()
+  )
+  const selectedCompanyName = selectedCompanyObj ? selectedCompanyObj.name : selectedCompany
+
   // Support pre-configured state from Dashboard navigation
   useEffect(() => {
     if (incomingState) {
@@ -443,6 +462,9 @@ export default function Interview() {
           setTimePerQuestion(incomingState.timePerQuestion)
           setTimeLeft(incomingState.timePerQuestion)
         }
+        if (incomingState.company || incomingState.selectedCompany) {
+          setSelectedCompany(incomingState.company || incomingState.selectedCompany)
+        }
         setStage('interview')
       } else {
         if (incomingState.type) setInterviewType(incomingState.type)
@@ -464,6 +486,9 @@ export default function Interview() {
         if (incomingState.jobTitle) {
           setJobTitle(incomingState.jobTitle.slice(0, 60))
         }
+        if (incomingState.company || incomingState.selectedCompany) {
+          setSelectedCompany(incomingState.company || incomingState.selectedCompany)
+        }
         const incomingTime = incomingState.timePerQuestion !== undefined ? incomingState.timePerQuestion : incomingState.timeLimit
         if (incomingTime !== undefined) {
           setTimePerQuestion(incomingTime)
@@ -479,6 +504,7 @@ export default function Interview() {
             resumeText: incomingState.resumeText || '',
             weakSpots: incomingState.weakSpots || null,
             interviewerStyle: incomingState.interviewerStyle || interviewerStyle || 'Standard',
+            company: incomingState.company || incomingState.selectedCompany || selectedCompany || null,
           })
         }
       }
@@ -787,8 +813,24 @@ export default function Interview() {
       if (activeWeakSpots) {
         requestPayload.weakSpots = activeWeakSpots
       }
+      const rawCompany = overrideParams?.company !== undefined ? overrideParams.company : selectedCompany
+      const targetCompany = companies.find(
+        (c) => c.id === rawCompany || c.name.toLowerCase() === String(rawCompany || '').toLowerCase()
+      )?.name || rawCompany
+      if (targetCompany) {
+        requestPayload.company = targetCompany
+        requestPayload.selectedCompany = targetCompany
+        requestPayload.companyId = rawCompany
+        requestPayload.companyMode = true
+      }
 
-      const response = await axios.post(`${API_BASE}/api/generate-questions`, requestPayload)
+      let response
+      try {
+        response = await axios.post(`${API_BASE}/api/interview/questions`, requestPayload)
+      } catch (errPost) {
+        console.warn('POST /api/interview/questions failed, falling back to /api/generate-questions:', errPost)
+        response = await axios.post(`${API_BASE}/api/generate-questions`, requestPayload)
+      }
 
       const fetchedList = Array.isArray(response.data)
         ? response.data
@@ -946,7 +988,10 @@ export default function Interview() {
             hasResume: isResumeActive,
             hasJobDescription: Boolean(jobDescription.trim() || hasJobDescription),
             jobTitle: (jobTitle || '').slice(0, 60),
+            company: selectedCompanyName || null,
+            isCompanyMode: Boolean(selectedCompany),
           },
+          company: selectedCompanyName || null,
           fillerCount: totalFillers,
           sessionId,
         },
@@ -1354,6 +1399,7 @@ export default function Interview() {
               </div>
             </div>
 
+
             {/* 1. Interview Type */}
             <div
               className="p-6 rounded-2xl"
@@ -1626,6 +1672,33 @@ export default function Interview() {
               </div>
             </div>
 
+            {/* Company Selection Section */}
+            <div style={{ marginBottom: '20px' }}>
+              <p style={{ color: 'white', fontWeight: '600', marginBottom: '8px' }}>
+                🏢 Company Mode <span style={{ color: '#888', fontWeight: 'normal', fontSize: '13px' }}>(Optional)</span>
+              </p>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+                {companies.map((c) => (
+                  <div
+                    key={c.id}
+                    onClick={() => setSelectedCompany(selectedCompany === c.id ? null : c.id)}
+                    style={{
+                      padding: '10px',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      textAlign: 'center',
+                      border: selectedCompany === c.id ? '2px solid #7c3aed' : '1px solid rgba(255,255,255,0.1)',
+                      background: selectedCompany === c.id ? 'rgba(124,58,237,0.2)' : 'rgba(255,255,255,0.05)',
+                    }}
+                  >
+                    <div style={{ fontSize: '18px' }}>{c.emoji}</div>
+                    <div style={{ color: 'white', fontSize: '12px', fontWeight: '600' }}>{c.name}</div>
+                    <div style={{ color: '#888', fontSize: '10px' }}>{c.focus}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
             {/* Launch Button */}
             <div className="pt-2">
               {isConnectingToAi && (
@@ -1637,7 +1710,7 @@ export default function Interview() {
               <button
                 id="btn-start-interview"
                 type="button"
-                onClick={handleStartInterview}
+                onClick={() => handleStartInterview({ company: selectedCompany })}
                 disabled={loadingQuestions}
                 className="btn-primary w-full justify-center py-4 rounded-xl text-base font-bold transition-all duration-300 disabled:opacity-50 cursor-pointer shadow-lg hover:shadow-indigo-500/25"
               >
@@ -1649,6 +1722,8 @@ export default function Interview() {
                         ? 'Connecting to AI...'
                         : isServerWaking
                         ? 'Waking up the interview server... this can take up to a minute on first visit'
+                        : selectedCompanyName
+                        ? `Generating ${selectedCompanyName} Interview Questions...`
                         : weakSpots || interviewType === 'Weak-spot practice'
                         ? 'Generating Targeted Weak-Spot Questions...'
                         : isResumeActive || resumeText.trim()
@@ -1661,7 +1736,9 @@ export default function Interview() {
                 ) : (
                   <div className="flex items-center gap-2">
                     <span>
-                      {weakSpots || interviewType === 'Weak-spot practice'
+                      {selectedCompanyName
+                        ? `Start ${selectedCompanyName} Mock Interview`
+                        : weakSpots || interviewType === 'Weak-spot practice'
                         ? 'Start Focused Weak-Spot Practice'
                         : isResumeActive || resumeText.trim()
                         ? 'Start Resume-Based Interview Session'
@@ -1674,7 +1751,9 @@ export default function Interview() {
                 )}
               </button>
               <p className="text-center text-xs text-[#94A3B8] mt-3">
-                {resumeText.trim()
+                {selectedCompanyName
+                  ? `Gemini AI will generate interview questions specifically in the style and hiring bar of ${selectedCompanyName}.`
+                  : resumeText.trim()
                   ? 'Gemini AI will generate targeted questions based on your resume projects, tools, and claims.'
                   : jobDescription.trim()
                   ? "Questions will be tailored to the role's skills, tools, and responsibilities while respecting your chosen difficulty."
@@ -1760,6 +1839,12 @@ export default function Interview() {
               <span className="inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 shadow-sm shadow-amber-500/20">
                 <Target className="w-3.5 h-3.5" />
                 Weak-spot practice
+              </span>
+            )}
+            {selectedCompanyName && (
+              <span className="inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/30 shadow-sm shadow-purple-500/20">
+                <Building2 className="w-3.5 h-3.5 text-purple-400" />
+                {selectedCompanyName} Mode
               </span>
             )}
           </div>
